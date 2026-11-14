@@ -54,5 +54,7 @@ P
 export MAG_ROOT=$PWD MAG_PREFIX=/usr MAG_REPO
 echo "installing: $base"
 mag install $base
+mkdir -p etc/ssl
+for f in cert.pem openssl.cnf x509v3.cnf; do [ -e etc/ssl/$f ] || cp usr/libressl/share/examples/libressl/$f etc/ssl/ 2>/dev/null; done
 [ -e bin/sh ] || ln -s ../usr/bin/sh bin/sh 2>/dev/null || true
 echo "done: $target"
