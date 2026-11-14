@@ -76,7 +76,7 @@ Chamesle is built from a running Linux machine: any distribution, or the live IS
 
 * `clang` and `lld`: `mag` and `rifle` are built with them, and so is everything in the new system
 * `gmake`, for musl
-* `curl`, which mag uses for downloads (`MAG_FETCH`)
+* `ftp` (tnftp), which mag uses for downloads (`MAG_FETCH`)
 * `tar` and a POSIX `sh`
 * `sfdisk`, `mkfs.ext4` and `mkfs.fat` to prepare the disk
 * `blkid` to read UUIDs
@@ -107,7 +107,7 @@ the tree is brought up to date. `MAG_SYNC_URL` names another file, and under `MA
 By hand it is the same thing:
 
     cd /usr
-    curl -fsSLO https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc.tar.xz
+    ftp -o pkgsrc.tar.xz https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc.tar.xz
     tar -xf pkgsrc.tar.xz
 
 pkgsrc has a directory per category (`shells`, `editors`, `www`, ...) and a directory per package inside it
@@ -255,7 +255,7 @@ usr/lib usr/sbin usr/share usr/local/bin var/cache var/lib var/log var/tmp`, wit
 `group`, `shells`, `fstab`, `profile`, `os-release`, `mag.conf`), and builds the base set into the target with `mag`:
 
     sys-libs/musl devel/gmake archivers/libarchive archivers/pigz shells/mksh sys-apps/util-linux
-    sys-apps/kmod sys-apps/eudev net/dhcpcd www/curl sysutils/e2fsprogs sysutils/dosfstools sys-boot/limine
+    sys-apps/kmod sys-apps/eudev net/dhcpcd net/tnftp sysutils/e2fsprogs sysutils/dosfstools sys-boot/limine
     sys-kernel/linux sys-kernel/linux-firmware sys-firmware/sof-firmware sys-firmware/wireless-regdb editors/vim
     sys-fs/zfs sys-kernel/zfs-module lang/clang devel/lld lang/compiler-rt lang/libunwind
 
@@ -418,8 +418,8 @@ they say.
 ### 4.2 Installing and removing
 
     mag install shells/mksh
-    mag install editors/vim www/curl
-    mag -n install www/curl           what would be built, nothing is done
+    mag install editors/vim net/tnftp
+    mag -n install net/tnftp           what would be built, nothing is done
     mag remove vim
 
 Packages are named as in the repo, `category/name`. `install` takes the dependencies first, downloads the source, checks
@@ -438,8 +438,8 @@ were installed only as dependencies and that nothing needs any more.
 ### 4.3 Finding things
 
     mag search editor              names and descriptions
-    mag info www/curl              the recipe, its version, whether it is installed, its options
-    mag deps www/curl              what it needs
+    mag info net/tnftp              the recipe, its version, whether it is installed, its options
+    mag deps net/tnftp              what it needs
     mag rdeps sys-libs/musl        what needs it
     mag files vim                  what an installed package put on the disk
     mag owns /usr/bin/vim          which package a file belongs to
@@ -462,12 +462,12 @@ puts the real paths back:
 | `MAG_ROOT`   | where to install | `/` |
 | `MAG_REPO`   | repositories, split by colons | `/usr/share/mag/repo:/usr/pkgsrc` |
 | `MAG_SYNC_URL` | the file `mag sync` fetches | NetBSD's `pkgsrc.tar.xz` |
-| `MAG_FETCH`  | the download command, given a file and a URL | `curl -fsSL -o` |
+| `MAG_FETCH`  | the download command, given a file and a URL | `ftp -o` |
 | `MAG_PREFIX` | `$PREFIX` in the steps | `/usr` |
 | `MAG_JOBS`   | `$JOBS` in the steps | `JOBS` of mag.conf, else 4 |
 | `MAG_SH`     | the shell the steps run under | `/bin/sh` |
 
-mag does not speak https itself; `MAG_FETCH` does, so curl has to be on the machine.
+mag does not speak https itself; `MAG_FETCH` does, so `ftp` has to be on the machine.
 
 ### 4.6 pkgsrc options
 
@@ -478,7 +478,7 @@ minus. Put them in `/etc/mag.conf`:
     PKG_DEFAULT_OPTIONS=-http2 idn
     PKG_OPTIONS.vim=python
 
-`mag info www/curl` shows the options a package ends up with, and its dependencies change with them. The recipes of
+`mag info net/tnftp` shows the options a package ends up with, and its dependencies change with them. The recipes of
 Chamesle's own repo have no options; they see `JOBS` and the flags only.
 
 ### 4.7 Writing a recipe
@@ -574,7 +574,7 @@ not. `./build.sh` has to have run first. A case that starts with `@ro` runs with
 `bwrap`, and is skipped when `bwrap` is missing.
 
 mag has a test of its own: `mag/tests/run.sh` builds a fake repo with local tarballs and goes through install, upgrade
-and remove in a scratch root. It needs curl, tar and the rifle tools in PATH.
+and remove in a scratch root. It needs ftp, tar and the rifle tools in PATH.
 
 
 ## 6. The base system
@@ -776,7 +776,7 @@ Edit `repo/sys-kernel/linux`:
 
 Download the file the `url` names with the new version filled in, and take the checksum:
 
-    curl -fsSLO URL
+    ftp -o FILE URL
     mag hash FILE
 
 Then:

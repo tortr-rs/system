@@ -12,7 +12,7 @@ usage() {
 	echo "  -n  host name of the new system (default chamesle)" >&2
 	exit 2
 }
-base="sys-libs/musl devel/gmake archivers/libarchive archivers/pigz shells/mksh sys-apps/util-linux sys-apps/kmod sys-apps/eudev net/dhcpcd www/curl sysutils/e2fsprogs sysutils/dosfstools sys-boot/limine sys-kernel/linux sys-kernel/linux-firmware sys-firmware/sof-firmware sys-firmware/wireless-regdb editors/vim sys-fs/zfs sys-kernel/zfs-module lang/clang devel/lld lang/compiler-rt lang/libunwind"
+base="sys-libs/musl devel/gmake archivers/libarchive archivers/pigz shells/mksh sys-apps/util-linux sys-apps/kmod sys-apps/eudev net/dhcpcd net/tnftp sysutils/e2fsprogs sysutils/dosfstools sys-boot/limine sys-kernel/linux sys-kernel/linux-firmware sys-firmware/sof-firmware sys-firmware/wireless-regdb editors/vim sys-fs/zfs sys-kernel/zfs-module lang/clang devel/lld lang/compiler-rt lang/libunwind"
 name=chamesle
 while getopts r:s:n: o; do
 	case $o in
@@ -70,7 +70,7 @@ export PAGER=less
 umask 022
 P
 [ -e etc/os-release ] || printf 'NAME=Chamesle\nID=chamesle\nPRETTY_NAME="Chamesle"\n' > etc/os-release
-[ -e etc/mag.conf ] || printf '# read by mag, same syntax as pkgsrc mk.conf\nJOBS=%s\nCFLAGS=-O2 -std=gnu17 -include sys/sysmacros.h\nPKG_OPTIONS.curl=-idn\nCONFIGURE_ARGS.libtirpc=--disable-gssapi\n' "$(nproc 2>/dev/null || echo 4)" > etc/mag.conf
+[ -e etc/mag.conf ] || printf '# read by mag, same syntax as pkgsrc mk.conf\nJOBS=%s\nCFLAGS=-O2 -std=gnu17 -include sys/sysmacros.h\nPKG_OPTIONS.tnftp=ssl\nCONFIGURE_ARGS.libtirpc=--disable-gssapi\n' "$(nproc 2>/dev/null || echo 4)" > etc/mag.conf
 export MAG_ROOT=$PWD MAG_PREFIX=/usr MAG_REPO
 echo "installing: $base"
 mag install $base
