@@ -8,7 +8,7 @@ and the package manager is `mag`.
 
 | part | what it is |
 |---|---|
-| kernel | Linux 6.18 LTS, the Alpine linux-lts build (chapter 3) |
+| kernel | Linux 6.18 LTS, prebuilt (chapter 3) |
 | musl | the C library |
 | rifle | the coreutils, one C file |
 | mag | the package manager, reads pkgsrc packages as they are |
@@ -60,10 +60,10 @@ our own repo have no options, they only see `JOBS` and the flags. Environment wi
 
 ## 3. The kernel
 
-Nobody here builds a kernel. `sys-kernel/linux` is the kernel and its modules from Alpine's linux-lts package
-(6.18 LTS, built with the config of a distribution kernel, so it runs on nearly any machine). mag fetches it from
-Alpine's mirror, checks the checksum and puts `vmlinuz`, `config`, `System.map` and the modules into `/boot` and
-`/lib/modules`. Alpine drops a package from its mirror when a newer one comes out, so a new kernel is a new `version`
+Nobody here builds a kernel. `sys-kernel/linux` is a prebuilt Linux 6.18 LTS kernel and its modules
+(a generic config, so it runs on nearly any machine). mag fetches it from
+the binary mirror named in the recipe, checks the checksum and puts `vmlinuz`, `config`, `System.map` and the modules into `/boot` and
+`/lib/modules`. The mirror drops a package when a newer one comes out, so a new kernel is a new `version`
 and `sha256` in `repo/sys-kernel/linux`. The firmware is `sys-kernel/linux-firmware`.
 
 ## 4. The ISO
@@ -135,7 +135,7 @@ Boot the ISO, log in as root, bring the network up (`dhcpcd`) and do this. `sda`
 
 6. Install limine for BIOS and unmount: `limine bios-install /dev/sda`, `umount -R /mnt`, reboot.
 
-An initramfs is not needed for a plain disk: the Alpine kernel has the common storage and ext4 drivers as modules,
+An initramfs is not needed for a plain disk: the kernel has the common storage and ext4 drivers as modules,
 and for a root on anything else you build your own and name it in limine.conf with `module_path`.
 
 ## 6. Files
