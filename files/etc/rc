@@ -1,7 +1,7 @@
 #!/bin/sh
 # run by init at boot
 . /etc/init.sh
-mount -o remount,rw / || echo "rc: / stays read-only" >&2
+grep -q " / overlay " /proc/mounts || mount -o remount,rw / || echo "rc: / stays read-only" >&2
 if [ "$1" = autoboot ]; then
 	fsck -A -R -p -T
 	case $? in 0|1) ;; *) echo "rc: the file system check failed" >&2; exit 1;; esac
@@ -20,3 +20,4 @@ dmesg > /var/log/dmesg.boot
 for s in $(conf boot-services); do
 	service "$s" start
 done
+exit 0
