@@ -5,21 +5,19 @@
 #   chamesle-bootstrap -r ~/repos/ports -s "shells/mksh editors/vim" /srv/chroot
 set -e
 usage() {
-	echo "usage: chamesle-bootstrap [-r REPOS] [-s PACKAGES] [-n HOSTNAME] [-k KERNEL.tar.xz] TARGET" >&2
+	echo "usage: chamesle-bootstrap [-r REPOS] [-s PACKAGES] [-n HOSTNAME] TARGET" >&2
 	echo "  -r  repos split by colons, what mag takes in MAG_REPO (default: \$MAG_REPO)" >&2
 	echo "  -s  the packages to install instead of the base set" >&2
 	echo "  -n  host name of the new system (default chamesle)" >&2
-	echo "  -k  a kernel tarball made by kernel/build.sh, unpacked into TARGET" >&2
 	exit 2
 }
-base="sys-libs/musl dev-build/gmake app-arch/libarchive app-arch/pigz shells/mksh sys-apps/dinit sys-apps/util-linux sys-apps/kmod sys-apps/eudev net-misc/dhcpcd net-misc/curl sys-fs/e2fsprogs sys-fs/dosfstools sys-boot/limine editors/vim"
+base="sys-libs/musl devel/gmake archivers/libarchive archivers/pigz shells/mksh sysutils/dinit sys-apps/util-linux sys-apps/kmod sys-apps/eudev net/dhcpcd www/curl sysutils/e2fsprogs sysutils/dosfstools sys-boot/limine sys-kernel/linux sys-kernel/linux-firmware sys-firmware/sof-firmware sys-firmware/wireless-regdb editors/vim"
 name=chamesle
-while getopts r:s:n:k: o; do
+while getopts r:s:n: o; do
 	case $o in
 	r) MAG_REPO=$OPTARG;;
 	s) base=$OPTARG;;
 	n) name=$OPTARG;;
-	k) kernel=$OPTARG;;
 	*) usage;;
 	esac
 done
@@ -54,8 +52,4 @@ export MAG_ROOT=$PWD MAG_PREFIX=/usr MAG_REPO
 echo "installing: $base"
 mag install $base
 [ -e bin/sh ] || ln -s ../usr/bin/sh bin/sh 2>/dev/null || true
-if [ -n "$kernel" ]; then
-	echo "kernel: $kernel"
-	xz -dc "$kernel" | tar -C "$target" -xf -
-fi
 echo "done: $target"

@@ -8,7 +8,7 @@ and the package manager is `mag`.
 
 | part | what it is |
 |---|---|
-| kernel | Linux 6.18, built by you (chapter 3) |
+| kernel | Linux 6.18 LTS, the Alpine linux-lts build (chapter 3) |
 | musl | the C library |
 | rifle | the coreutils, one C file |
 | mag | the package manager, reads pkgsrc packages as they are |
@@ -27,8 +27,7 @@ and the package manager is `mag`.
 Building everything from source takes a while (LLVM is the long one). Packages are not built twice: the sources
 are kept in `var/cache/mag` inside the target.
 
-`-s "shells/mksh editors/vim"` installs your own list, `-n name` sets the host name, `-k kernel.tar.xz` unpacks a
-kernel from chapter 3 into the target.
+`-s "shells/mksh editors/vim"` installs your own list, `-n name` sets the host name.
 
 ## 2. mag
 
@@ -59,46 +58,25 @@ pkgsrc's `mk.conf` syntax, plain `VAR=value` lines, read from `$MAG_ROOT/etc/mag
 our own repo have no options, they only see `JOBS` and the flags. Environment wins over the file
 (`MAG_JOBS`, `CFLAGS`).
 
-## 3. Building the kernel on the MSI
+## 3. The kernel
 
-The MSI is the machine the kernel has to boot on, so it is the one that knows what hardware there is. Any
-Linux that already runs on it will do for the building.
-
-Step one. Tell us what is in the machine:
-
-    sh kernel/collect-hw.sh        # writes hw.txt: cpu, pci, usb, loaded modules, UEFI or BIOS. no serial numbers, no addresses
-
-Step two. Build:
-
-    sh kernel/build.sh             # config of the running kernel as the start, safe and big
-    sh kernel/build.sh small       # only what the machine uses right now (plug in everything you own first)
-
-It downloads linux-6.18.63 from kernel.org, checks the checksum, builds `bzImage` and the modules and packs them into
-`~/chamesle-kernel/chamesle-kernel-6.18.63.tar.xz`. It needs gcc or clang, make, flex, bison, bc, perl, curl, xz.
-On a recent MSI with many cores it takes a quarter of an hour, with `small` less.
-
-Step three. Get the files to the computer that builds Chamesle. Any of these:
-
-* **a USB stick:** copy `chamesle-kernel-6.18.63.tar.xz`, `chamesle-kernel-6.18.63.sha256` and `hw.txt` onto it
-* **over the network with nc:** on the receiving computer `nc -l 9000 > kernel.tar.xz`, on the MSI
-  `nc ADDRESS 9000 < chamesle-kernel-6.18.63.tar.xz` (address is what `ip -4 addr` shows on the receiving one)
-* **the MSI serves, the other fetches:** on the MSI `cd ~/chamesle-kernel && python3 -m http.server 8000`, on the
-  other `curl -O http://MSI-ADDRESS:8000/chamesle-kernel-6.18.63.tar.xz`
-* **scp** works when sshd runs on the receiving side
-
-Check it on arrival: `sha256sum -c chamesle-kernel-6.18.63.sha256`.
+Nobody here builds a kernel. `sys-kernel/linux` is the kernel and its modules from Alpine's linux-lts package
+(6.18 LTS, built with the config of a distribution kernel, so it runs on nearly any machine). mag fetches it from
+Alpine's mirror, checks the checksum and puts `vmlinuz`, `config`, `System.map` and the modules into `/boot` and
+`/lib/modules`. Alpine drops a package from its mirror when a newer one comes out, so a new kernel is a new `version`
+and `sha256` in `repo/sys-kernel/linux`. The firmware is `sys-kernel/linux-firmware`.
 
 ## 4. The ISO
 
 The ISO is an installer: it boots a small live system, and `chamesle-install` puts that on a disk. It boots on BIOS
 and UEFI machines with limine.
 
-    iso/mkiso -k chamesle-kernel-6.18.63.tar.xz -r $HOME/src/mag/repo:/usr/pkgsrc
+    iso/mkiso -r $HOME/src/mag/repo:/usr/pkgsrc
 
 What it does, in order: `chamesle-bootstrap` builds a root from `iso/profile/packages`, the files of
-`iso/profile/overlay` are copied over it, the kernel tarball from chapter 3 is unpacked into it, `mkinitramfs`
+`iso/profile/overlay` are copied over it, `mkinitramfs`
 makes the initrd (a few static tools, the modules in `iso/profile/modules` with what they depend on, `iso/init`),
-the root becomes a zstd squashfs, and `mkisofs` writes the ISO with limine's BIOS and UEFI boot images.
+the root becomes a zstd squashfs, and `xorriso` writes the ISO with limine's BIOS and UEFI boot images.
 `-R dir` uses a root you already have instead of building one (it is copied, not changed).
 
 At boot `init` looks for the medium that has `LiveOS/rootfs.sfs`, mounts it read-only, puts a tmpfs overlay over it,
@@ -114,10 +92,8 @@ Try an ISO without a machine:
     qemu-system-x86_64 -cpu max -m 1G -cdrom chamesle.iso -boot d
     qemu-system-x86_64 -cpu max -m 1G -bios /usr/share/qemu/edk2-x86_64-code.fd -cdrom chamesle.iso   # uefi
 
-mkiso needs `mksquashfs` (filesystems/squashfs), `mkisofs` (sysutils/cdrtools, `MKISOFS` says which one), `zstd`,
-`bsdcpio` and `limine` on the machine that builds. cdrtools' mkisofs makes an ISO that boots on BIOS machines and virtual machines from a CD. Limine's UEFI boot needs the
-EFI image as a GPT partition inside the ISO, which only xorriso can write: for an ISO that boots on UEFI and from a stick,
-build with `MKISOFS="xorriso -as mkisofs"`. `LIMINE` says where limine's files are (default /usr/share/limine).
+mkiso needs `mksquashfs` (filesystems/squashfs), `xorriso` (sysutils/libisoburn), `zstd`, `bsdcpio` and `limine` on the
+machine that builds. The ISO boots on BIOS and UEFI machines, from a CD and from a stick (dd it). `LIMINE` says where limine's files are (default /usr/share/limine).
 
 ## 5. Files
 
