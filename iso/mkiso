@@ -34,15 +34,17 @@ if [ -z "$rootfs" ]; then
 	rm -rf "$rootfs"
 	"$here/../tools/chamesle-bootstrap" -s "$(grep -v '^#' "$profile/packages" | tr '\n' ' ')" -n chamesle-live "$rootfs"
 else
+	from=$rootfs
 	rm -rf "$work/rootfs"
 	cp -a "$rootfs" "$work/rootfs"
 	rootfs=$work/rootfs
 fi
+[ -n "$MAG" ] || MAG=$(command -v mag) || die "no mag: put it in PATH or set MAG"
+MAG_ROOT=$rootfs MAG_PREFIX=/usr "$MAG" relocate ${from:+"$from"}
 
 tar -C "$profile/overlay" -cf - . | tar -C "$rootfs" -xf -
 install -Dm755 "$here/../tools/chamesle-bootstrap" "$rootfs/usr/bin/chamesle-bootstrap"
 install -Dm644 "$here/../handbook/handbook.md" "$rootfs/usr/share/doc/chamesle/handbook.md"
-[ -n "$MAG" ] || MAG=$(command -v mag) || die "no mag: put it in PATH or set MAG"
 install -Dm755 "$MAG" "$rootfs/usr/bin/mag"
 vmlinuz=$(ls "$rootfs"/boot/vmlinuz-* | head -n 1)
 kver=$(ls "$rootfs/lib/modules" | head -n 1)
