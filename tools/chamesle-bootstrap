@@ -75,5 +75,6 @@ echo "installing: $base"
 mag install $base
 mkdir -p etc/ssl
 for f in cert.pem openssl.cnf x509v3.cnf; do [ -e etc/ssl/$f ] || cp usr/libressl/share/examples/libressl/$f etc/ssl/ 2>/dev/null; done
-[ -e bin/sh ] || ln -s ../usr/bin/sh bin/sh 2>/dev/null || true
+[ -e usr/bin/sh ] || ln -s mksh usr/bin/sh
+[ -e bin/sh ] || ln -s ../usr/bin/sh bin/sh
 echo "done: $target"
