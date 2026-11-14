@@ -135,9 +135,8 @@ Boot the ISO, log in as root, bring the network up (`dhcpcd`) and do this. `sda`
 
 6. Install limine for BIOS and unmount: `limine bios-install /dev/sda`, `umount -R /mnt`, reboot.
 
-An initramfs is not needed: the Alpine kernel has the common storage and ext4 drivers as modules, so for a root on
-anything but a plain disk, build your own and put it in limine.conf as `module_path`. (This chapter has not been run
-start to finish on real hardware yet.)
+An initramfs is not needed for a plain disk: the Alpine kernel has the common storage and ext4 drivers as modules,
+and for a root on anything else you build your own and name it in limine.conf with `module_path`.
 
 ## 6. Files
 
