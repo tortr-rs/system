@@ -22,7 +22,7 @@ respawn() {
 		trap - INT TERM USR1 USR2
 		while :; do
 			t=$SECONDS
-			eval "$2"
+			eval "setsid $2"
 			[ $((SECONDS - t)) -gt 5 ] || sleep 5
 		done
 	) &
