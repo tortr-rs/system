@@ -18,6 +18,7 @@ chmod 1777 /tmp
 mkdir -p /var/log /var/db /var/lib /var/cache /var/tmp
 chmod 1777 /var/tmp
 [ -e /var/run ] || ln -s ../run /var/run
+hwclock -s 2>/dev/null
 host=$(conf hostname)
 [ -n "$host" ] && echo "$host" > /proc/sys/kernel/hostname
 dmesg > /var/log/dmesg.boot
