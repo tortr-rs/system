@@ -1,6 +1,6 @@
 #!/bin/sh
 . /etc/init.sh
-. /etc/services.subr
+. /etc/rc.subr
 svc_start() {
 	for m in $(conf modules); do
 		modprobe "$m" || log "cannot load $m"

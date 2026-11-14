@@ -1,5 +1,5 @@
 #!/bin/sh
-. /etc/services.subr
+. /etc/rc.subr
 procname=NetworkManager
 svc_start() { NetworkManager; }
 run "$1"

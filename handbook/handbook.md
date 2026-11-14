@@ -637,7 +637,7 @@ lines are ignored, spaces around `=` are free. A list is in braces and may go ov
 The parser is `conf` in `/etc/init.sh`; `conf KEY` prints the value, with a list separated by spaces. A change to
 `ttys` or `getty` takes effect at the next boot.
 
-A service is an executable file in `/etc/services` (or `/usr/local/etc/services`, for the ones you add) that takes
+A service is an executable file in `/etc/rc.d` (or `/usr/local/etc/rc.d`, for the ones you add) that takes
 `start`, `stop`, `restart` or `status`. The base set has three: `udev` (starts `udevd`, replays the devices and waits
 for them), `modules` and `network` (`dhcpcd`). A name in `boot-services` without a script is skipped with one line
 saying so.
@@ -650,12 +650,12 @@ saying so.
     service udev status
 
 To add a service, write the script, make it executable, and put its name in `boot-services`. With
-`/etc/services.subr` it is short. Set `procname` to the name the process shows in `/proc/PID/comm`, write
+`/etc/rc.subr` it is short. Set `procname` to the name the process shows in `/proc/PID/comm`, write
 `svc_start`, and finish with `run "$1"`; `stop` then kills that process, `status` looks for it and `start` refuses to
 start it twice. Override `svc_stop` and `svc_status` if the defaults do not fit:
 
     #!/bin/sh
-    . /etc/services.subr
+    . /etc/rc.subr
     procname=chronyd
     svc_start() { chronyd; }
     run "$1"
@@ -1025,7 +1025,8 @@ into a staging directory and prints where the files are.
 |------|------|
 | `/sbin/init`, `/etc/rc`, `/etc/rc.shutdown` | init, the boot script, the shutdown script, all run by mksh |
 | `/etc/init.conf` | host name, boot services, modules, ttys |
-| `/etc/services/`, `/usr/local/etc/services/` | the service scripts |
+| `/etc/rc.d/`, `/usr/local/etc/rc.d/` | the service scripts |
+| `/etc/services`, `/etc/hosts` | port names and the local host name, the libc reads them |
 | `/etc/profile` | `PATH`, `EDITOR`, `PAGER`, `umask` |
 | `/etc/passwd`, `/etc/group`, `/etc/shells` | accounts, groups, login shells |
 | `/etc/fstab` | file systems |

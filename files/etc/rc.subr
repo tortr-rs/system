@@ -1,4 +1,4 @@
-# what a script in /etc/services uses: set procname, define svc_start (and svc_stop, svc_status if the
+# what a script in /etc/rc.d uses: set procname, define svc_start (and svc_stop, svc_status if the
 # defaults do not fit), then call run "$1"
 name=${0##*/}
 

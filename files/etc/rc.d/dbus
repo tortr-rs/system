@@ -1,5 +1,5 @@
 #!/bin/sh
-. /etc/services.subr
+. /etc/rc.subr
 procname=dbus-daemon
 svc_start() {
 	mkdir -p /var/lib/dbus /run/dbus
