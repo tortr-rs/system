@@ -23,7 +23,7 @@ mkdir -p /mnt/root
 if [ -n "$zfs" ]; then
 	while read -r ko; do insmod "$ko" || fail "cannot load $ko"; done < /modules.zfs
 	n=0
-	until zpool import -N -d /dev "${zfs%%/*}" 2>/dev/null; do
+	until zpool import -N -f -d /dev "${zfs%%/*}" 2>/dev/null; do
 		n=$((n + 1))
 		[ $n -lt 15 ] || fail "cannot import the pool ${zfs%%/*}"
 		sleep 1
