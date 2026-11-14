@@ -1,0 +1,11 @@
+#!/bin/sh
+. /etc/services.subr
+procname=dbus-daemon
+svc_start() {
+	mkdir -p /var/lib/dbus /run/dbus
+	chown dbus:dbus /run/dbus
+	[ -s /var/lib/dbus/machine-id ] || dbus-uuidgen --ensure=/var/lib/dbus/machine-id
+	rm -f /run/dbus/pid
+	dbus-daemon --system
+}
+run "$1"
