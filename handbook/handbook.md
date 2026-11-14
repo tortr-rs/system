@@ -254,7 +254,7 @@ usr/lib usr/sbin usr/share usr/local/bin var/cache var/lib var/log var/tmp`, wit
 `root` mode 700), installs everything in `files/` (init, rc, the services, `init.conf`), writes the first `/etc` files (`passwd`,
 `group`, `shells`, `fstab`, `profile`, `os-release`, `mag.conf`), and builds the base set into the target with `mag`:
 
-    sys-libs/musl devel/gmake archivers/libarchive archivers/pigz shells/mksh sys-apps/util-linux
+    sys-libs/musl devel/gmake archivers/libarchive app-arch/bsdtar archivers/pigz shells/mksh sys-apps/util-linux
     sys-apps/kmod sys-apps/eudev net/dhcpcd net/tnftp sysutils/e2fsprogs sysutils/dosfstools sys-boot/limine
     sys-kernel/linux sys-kernel/linux-firmware sys-firmware/sof-firmware sys-firmware/wireless-regdb editors/vim
     sys-fs/zfs sys-kernel/zfs-module lang/clang devel/lld lang/compiler-rt lang/libunwind

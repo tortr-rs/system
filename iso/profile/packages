@@ -2,6 +2,7 @@
 sys-libs/musl
 devel/gmake
 archivers/libarchive
+app-arch/bsdtar
 archivers/pigz
 shells/mksh
 sys-apps/util-linux
