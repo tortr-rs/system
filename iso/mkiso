@@ -42,6 +42,8 @@ fi
 [ -n "$MAG" ] || MAG=$(command -v mag) || die "no mag: put it in PATH or set MAG"
 MAG_ROOT=$rootfs MAG_PREFIX=/usr "$MAG" relocate ${from:+"$from"}
 
+rm -rf "$rootfs"/var/cache/mag "$rootfs"/var/tmp/mag "$rootfs"/usr/include "$rootfs"/usr/lib/pkgconfig "$rootfs"/lib/firmware
+find "$rootfs"/usr/lib -name "*.a" -o -name "*.la" | xargs rm -f
 tar -C "$profile/overlay" -cf - . | tar -C "$rootfs" -xf -
 install -Dm755 "$here/../tools/chamesle-bootstrap" "$rootfs/usr/bin/chamesle-bootstrap"
 install -Dm644 "$here/../handbook/handbook.md" "$rootfs/usr/share/doc/chamesle/handbook.md"

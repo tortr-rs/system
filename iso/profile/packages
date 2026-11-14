@@ -13,7 +13,5 @@ sysutils/e2fsprogs
 sysutils/dosfstools
 sys-boot/limine
 sys-kernel/linux
-sys-kernel/linux-firmware
-sys-firmware/sof-firmware
 sys-firmware/wireless-regdb
 editors/vim
