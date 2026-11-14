@@ -10,16 +10,28 @@ root=$1 kver=$2 out=$3
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp"/bin "$tmp"/dev "$tmp"/proc "$tmp"/sys "$tmp"/run "$tmp"/mnt "$tmp"/lib/modules
+rd=$(command -v llvm-readelf || command -v readelf) || { echo "mkinitramfs: no readelf" >&2; exit 1; }
+# copy what a binary links against: the musl loader and every NEEDED library found in the root
+needed() {
+	$rd -d "$1" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | while read -r l; do
+		[ -e "$tmp/usr/lib/$l" ] && continue
+		for d in usr/lib lib; do
+			[ -e "$root/$d/$l" ] || continue
+			mkdir -p "$tmp/usr/lib"
+			cp -L "$root/$d/$l" "$tmp/usr/lib/$l"
+			needed "$root/$d/$l"
+			break
+		done
+	done
+}
+mkdir -p "$tmp/lib" "$tmp/usr/lib"
+cp -L "$root/usr/lib/libc.so" "$tmp/lib/ld-musl-x86_64.so.1"
 for t in sh mount umount switch_root insmod mkdir sleep blkid; do
 	f=
 	for d in usr/bin bin usr/sbin sbin; do [ -x "$root/$d/$t" ] && { f=$root/$d/$t; break; }; done
 	[ -n "$f" ] || { echo "mkinitramfs: no $t in $root" >&2; exit 1; }
 	cp "$f" "$tmp/bin/$t"
-	ldd "$f" 2>/dev/null | sed -n 's|.*=> \(/[^ ]*\) .*|\1|p; s|^[[:space:]]*\(/[^ ]*\) (.*|\1|p' | while read -r l; do
-		[ -f "$root$l" ] && src=$root$l || src=$l
-		mkdir -p "$tmp$(dirname "$l")"
-		cp -L "$src" "$tmp$l"
-	done
+	needed "$f"
 done
 : > "$tmp/modules"
 if [ -n "$list" ]; then
