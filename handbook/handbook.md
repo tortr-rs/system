@@ -46,6 +46,19 @@ A file called `PROVIDES` in a repo says which of our packages stands in for a pk
 our zlib and not a second one) and which dependencies a pkgsrc Makefile forgets (`needs`). Everything lands in
 `$MAG_ROOT`, nothing is ever installed over a file another package owns, and `/etc` files you changed stay.
 
+### /etc/mag.conf
+
+pkgsrc's `mk.conf` syntax, plain `VAR=value` lines, read from `$MAG_ROOT/etc/mag.conf`:
+
+    JOBS=8                          # $JOBS in the steps, make -j
+    CFLAGS=-O2 -pipe                # also CXXFLAGS, CPPFLAGS, LDFLAGS, for every build
+    PKG_DEFAULT_OPTIONS=-http2 idn  # options for every pkgsrc package that has them, a minus turns one off
+    PKG_OPTIONS.vim=python          # the options of one package
+
+`mag info www/curl` shows the options a package ends up with and its dependencies change with them. Packages of
+our own repo have no options, they only see `JOBS` and the flags. Environment wins over the file
+(`MAG_JOBS`, `CFLAGS`).
+
 ## 3. Building the kernel on the MSI
 
 The MSI is the machine the kernel has to boot on, so it is the one that knows what hardware there is. Any
