@@ -1,0 +1,21 @@
+# modules the initramfs loads to find the medium or the root, with what they depend on
+squashfs
+overlay
+loop
+isofs
+sr_mod
+cdrom
+sd_mod
+usb_storage
+uas
+xhci_pci
+ehci_pci
+ahci
+nvme
+virtio_blk
+virtio_pci
+virtio_scsi
+ext4
+vfat
+nls_cp437
+nls_iso8859_1

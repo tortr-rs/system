@@ -1,0 +1,54 @@
+#!/bin/sh
+# the first process in the initramfs. mounts the medium or the root named on the command line and hands over.
+export PATH=/bin
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+
+while read -r ko; do insmod "$ko" 2>/dev/null; done < /modules
+
+read -r cmdline < /proc/cmdline
+for w in $cmdline; do
+	case $w in
+	root=UUID=*) uuid=${w#root=UUID=};;
+	root=*) dev=${w#root=};;
+	esac
+done
+
+fail() { echo "init: $*"; echo "init: dropping to a shell"; exec sh; }
+
+mkdir -p /mnt/root
+
+if [ -n "$uuid$dev" ]; then
+	n=0
+	while [ $n -lt 15 ]; do
+		[ -n "$uuid" ] && dev=$(blkid -U "$uuid" 2>/dev/null)
+		[ -b "$dev" ] && break
+		sleep 1; n=$((n + 1))
+	done
+	[ -b "$dev" ] || fail "root device not found"
+	mount -o ro "$dev" /mnt/root || fail "cannot mount $dev"
+else
+	mkdir -p /mnt/medium /mnt/lower /mnt/rw
+	n=0
+	found=
+	while [ -z "$found" ] && [ $n -lt 20 ]; do
+		for d in /dev/sr* /dev/sd* /dev/nvme*n*p* /dev/vd* /dev/mmcblk*; do
+			[ -b "$d" ] || continue
+			mount -o ro "$d" /mnt/medium 2>/dev/null || continue
+			[ -f /mnt/medium/LiveOS/rootfs.sfs ] && { found=$d; break; }
+			umount /mnt/medium
+		done
+		[ -n "$found" ] || { sleep 1; n=$((n + 1)); }
+	done
+	[ -n "$found" ] || fail "no medium with LiveOS/rootfs.sfs"
+	mount -t squashfs -o loop,ro /mnt/medium/LiveOS/rootfs.sfs /mnt/lower || fail "cannot mount the squashfs"
+	mount -t tmpfs tmpfs /mnt/rw
+	mkdir -p /mnt/rw/up /mnt/rw/work
+	mount -t overlay overlay -o lowerdir=/mnt/lower,upperdir=/mnt/rw/up,workdir=/mnt/rw/work /mnt/root || fail "cannot mount the overlay"
+	mkdir -p /mnt/root/run/live/medium /mnt/root/run/live/rootfs
+	mount --move /mnt/medium /mnt/root/run/live/medium
+	mount --move /mnt/lower /mnt/root/run/live/rootfs
+fi
+
+exec switch_root /mnt/root /sbin/init

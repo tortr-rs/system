@@ -1,0 +1,76 @@
+#!/bin/sh
+# chamesle-install: partitions a disk, copies the system on it, sets up limine.
+set -e
+live=/run/live/rootfs
+die() { echo "chamesle-install: $*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || die "run it as root"
+[ -d $live ] || die "this is not the live system"
+
+echo "disks:"
+lsblk -dno NAME,SIZE,MODEL | grep -v '^\(loop\|sr\|ram\)'
+printf 'install on which disk (name, like sda or nvme0n1)? '
+read -r d
+disk=/dev/$d
+[ -b "$disk" ] || die "$disk is not a disk"
+printf 'host name [chamesle]: '
+read -r name
+name=${name:-chamesle}
+printf 'root password: '
+stty -echo 2>/dev/null; read -r pw; stty echo 2>/dev/null; echo
+[ -n "$pw" ] || die "empty password"
+printf 'everything on %s will be erased. type yes to go on: ' "$disk"
+read -r ok
+[ "$ok" = yes ] || die "stopped"
+
+case $disk in *[0-9]) p=${disk}p;; *) p=$disk;; esac
+sfdisk -q "$disk" <<P
+label: gpt
+size=1M, type=21686148-6449-6E6F-744E-656564454649
+size=512M, type=U
+type=L
+P
+sleep 1
+mkfs.fat -F32 -n CHAMESLE "${p}2" >/dev/null
+mkfs.ext4 -q -F -L chamesle "${p}3"
+
+t=/mnt/target
+mkdir -p $t
+mount "${p}3" $t
+mkdir -p $t/boot
+mount "${p}2" $t/boot
+echo "copying the system..."
+tar -C $live -cf - . | tar -C $t -xf -
+mkdir -p $t/proc $t/sys $t/dev $t/run $t/tmp
+chmod 1777 $t/tmp
+
+root_uuid=$(blkid -s UUID -o value "${p}3")
+esp_uuid=$(blkid -s UUID -o value "${p}2")
+echo "$name" > $t/etc/hostname
+cat > $t/etc/fstab <<P
+UUID=$root_uuid / ext4 defaults 0 1
+UUID=$esp_uuid /boot vfat defaults 0 2
+proc /proc proc defaults 0 0
+sysfs /sys sysfs defaults 0 0
+tmpfs /tmp tmpfs mode=1777 0 0
+P
+hash=$(openssl passwd -1 "$pw")
+sed -i "s|^root:[^:]*:|root:$hash:|" $t/etc/passwd
+rm -f $t/etc/motd
+
+cp /run/live/medium/boot/vmlinuz $t/boot/vmlinuz
+cp /run/live/medium/boot/initrd $t/boot/initrd
+mkdir -p $t/boot/EFI/BOOT
+cp /run/live/medium/EFI/BOOT/BOOTX64.EFI $t/boot/EFI/BOOT/
+cp /run/live/medium/boot/limine/limine-bios.sys $t/boot/
+cat > $t/boot/limine.conf <<P
+timeout: 3
+
+/Chamesle
+    protocol: linux
+    path: boot():/vmlinuz
+    module_path: boot():/initrd
+    cmdline: root=UUID=$root_uuid rw quiet
+P
+limine bios-install "$disk" >/dev/null
+umount $t/boot $t
+echo "done. take out the installer and reboot."

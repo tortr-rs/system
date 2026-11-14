@@ -90,8 +90,32 @@ Check it on arrival: `sha256sum -c chamesle-kernel-6.18.63.sha256`.
 
 ## 4. The ISO
 
-One ISO boots on any machine and has oksh as the login shell and vim installed. It is a squashfs root file system
-made by `chamesle-bootstrap`, the kernel from chapter 3 and limine on top. The builder is not written yet.
+The ISO is an installer: it boots a small live system, and `chamesle-install` puts that on a disk. It boots on BIOS
+and UEFI machines with limine.
+
+    iso/mkiso -k chamesle-kernel-6.18.63.tar.xz -r $HOME/src/mag/repo:/usr/pkgsrc
+
+What it does, in order: `chamesle-bootstrap` builds a root from `iso/profile/packages`, the files of
+`iso/profile/overlay` are copied over it, the kernel tarball from chapter 3 is unpacked into it, `mkinitramfs`
+makes the initrd (a few static tools, the modules in `iso/profile/modules` with what they depend on, `iso/init`),
+the root becomes a zstd squashfs, and `xorriso` writes the ISO with limine's BIOS and UEFI boot images.
+`-R dir` uses a root you already have instead of building one (it is copied, not changed).
+
+At boot `init` looks for the medium that has `LiveOS/rootfs.sfs`, mounts it read-only, puts a tmpfs overlay over it,
+and switches into the result. The medium and the squashfs stay mounted under `/run/live/`, which is where the
+installer copies from. An installed system boots with `root=UUID=...` on the same initrd.
+
+`chamesle-install` asks for the disk, a host name and a root password, then makes a GPT with a 1M BIOS boot
+partition, a 512M EFI partition (also `/boot`) and the rest as ext4, copies the system, writes fstab and
+limine.conf and installs limine for both BIOS and UEFI.
+
+Try an ISO without a machine:
+
+    qemu-system-x86_64 -cpu max -m 1G -cdrom chamesle.iso -boot d
+    qemu-system-x86_64 -cpu max -m 1G -bios /usr/share/qemu/edk2-x86_64-code.fd -cdrom chamesle.iso   # uefi
+
+mkiso needs `mksquashfs`, `xorriso` (or any mkisofs: set `MKISOFS`), `zstd`, `bsdcpio` and `limine` on the machine
+that builds. `LIMINE` says where limine's files are (default /usr/share/limine).
 
 ## 5. Files
 

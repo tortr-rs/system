@@ -1,0 +1,38 @@
+#!/bin/sh
+# mkinitramfs [-m modules-file] ROOTFS KVER OUT: a cpio of the few tools init needs, the modules named in the
+# modules file with what they depend on, and init itself.
+set -e
+here=$(cd "$(dirname "$0")" && pwd)
+while getopts m: o; do case $o in m) list=$OPTARG;; *) exit 2;; esac; done
+shift $((OPTIND - 1))
+[ $# = 3 ] || { echo "usage: mkinitramfs [-m modules] ROOTFS KVER OUT" >&2; exit 2; }
+root=$1 kver=$2 out=$3
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+mkdir -p "$tmp"/bin "$tmp"/dev "$tmp"/proc "$tmp"/sys "$tmp"/run "$tmp"/mnt "$tmp"/lib/modules
+for t in sh mount umount switch_root insmod mkdir sleep blkid; do
+	f=
+	for d in usr/bin bin usr/sbin sbin; do [ -x "$root/$d/$t" ] && { f=$root/$d/$t; break; }; done
+	[ -n "$f" ] || { echo "mkinitramfs: no $t in $root" >&2; exit 1; }
+	cp "$f" "$tmp/bin/$t"
+	ldd "$f" 2>/dev/null | sed -n 's|.*=> \(/[^ ]*\) .*|\1|p; s|^[[:space:]]*\(/[^ ]*\) (.*|\1|p' | while read -r l; do
+		[ -f "$root$l" ] && src=$root$l || src=$l
+		mkdir -p "$tmp$(dirname "$l")"
+		cp -L "$src" "$tmp$l"
+	done
+done
+: > "$tmp/modules"
+if [ -n "$list" ]; then
+	grep -v '^#' "$list" | while read -r m; do
+		[ -n "$m" ] || continue
+		modprobe -d "$root" -S "$kver" --show-depends "$m" 2>/dev/null | sed -n 's/^insmod //p'
+	done | awk '!seen[$0]++' | while read -r ko; do
+		ko=${ko#$root}
+		mkdir -p "$tmp$(dirname "$ko")"
+		cp "$root$ko" "$tmp$ko"
+		echo "$ko" >> "$tmp/modules"
+	done
+fi
+cp "$here/init" "$tmp/init"
+chmod 755 "$tmp/init"
+(cd "$tmp" && find . | bsdcpio -o -H newc 2>/dev/null) | zstd -19 -q -o "$out" -f
