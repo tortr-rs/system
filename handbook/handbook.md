@@ -186,10 +186,10 @@ the ISO is mounted on `/run/live/rootfs` and the ISO itself on `/run/live/medium
     cp /run/live/medium/boot/initrd /mnt/boot/initrd
 
 That is the whole base system, kernel and modules included, as it was when the ISO was made. The firmware for wifi
-and some network cards is not on the ISO. Add it with mag once the new system runs (section 4), or skip to 3.4 and build everything instead, which needs a
+and some network cards is not on the ISO. Add it with mag once the new system runs (section 4), or build everything instead (3.4), which needs a
 machine with a compiler.
 
-Then go on with 3.5 (fstab) and the rest. The kernel is in `/mnt/boot` already.
+Then go on with 3.6 (fstab) and the rest. rifle (3.5) is on the ISO already, skip it. The kernel is in `/mnt/boot` already.
 
 ### 3.4 Building the system from source, instead
 
