@@ -9,7 +9,7 @@ disk=$1
 [ -b "$disk" ] || die "$disk is not a block device"
 for t in cfdisk mkfs.fat zpool zfs blkid lsblk; do command -v $t >/dev/null || die "$t is not installed"; done
 mountpoint -q /mnt && die "/mnt is in use, unmount it first"
-zpool list rpool >/dev/null 2>&1 && die "a pool called rpool is already imported"
+zpool list rpool >/dev/null 2>&1 && die "a pool called rpool is already imported (zpool export -f rpool to let go of it)"
 
 lsblk "$disk"
 echo "Everything on $disk will be erased."
@@ -36,16 +36,18 @@ root=$(part "Which partition is the root (ZFS)") || exit 1
 [ "$boot" != "$root" ] || die "boot and root cannot be the same partition"
 
 [ -e /dev/zfs ] || modprobe zfs || die "the zfs module is not there"
+modprobe vfat; modprobe nls_utf8
 mkfs.fat -F32 "$boot" || die "mkfs.fat failed"
+undo() { umount /mnt/boot 2>/dev/null; zpool export -f rpool 2>/dev/null; die "$1, rpool was exported again, run chamesle-disk again"; }
 zpool create -f -o ashift=12 -O compression=zstd -O acltype=posixacl -O xattr=sa -O mountpoint=none -R /mnt rpool "$root" || die "zpool create failed"
-zfs create -o mountpoint=/ -o canmount=noauto rpool/root || die "zfs create failed"
+zfs create -o mountpoint=/ -o canmount=noauto rpool/root || undo "zfs create failed"
 zfs create -o mountpoint=/home rpool/home
 zfs create -o mountpoint=/var rpool/var
 zpool set bootfs=rpool/root rpool
-zfs mount rpool/root || die "cannot mount rpool/root"
+zfs mount rpool/root || undo "cannot mount rpool/root"
 zfs mount -a
 mkdir -p /mnt/boot /mnt/etc
-mount "$boot" /mnt/boot || die "cannot mount $boot"
+mount -t vfat "$boot" /mnt/boot || undo "cannot mount $boot"
 
 if [ -e /mnt/etc/fstab ]; then
 	echo "/mnt/etc/fstab is there already, left alone"
@@ -64,5 +66,5 @@ cat <<N
 
 $boot is vfat and mounted on /mnt/boot, the pool rpool is on $root and mounted on /mnt.
 Now install the system into /mnt, then limine.conf, the host name and a password: chapter 3 of the handbook,
-section 3.3 onwards (less /usr/share/doc/chamesle/handbook.md).
+section 3.3 onwards (cat /usr/share/doc/chamesle/handbook.md).
 N
