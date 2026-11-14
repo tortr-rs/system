@@ -102,12 +102,12 @@ Let mag fetch a pkgsrc tree from NetBSD and unpack it into `/usr/pkgsrc`:
 
     mag sync
 
-`sync` downloads `https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc.tar.xz` and replaces the tree with it, so it is also how
+`sync` downloads `https://ftp.netbsd.org/pub/pkgsrc/current/pkgsrc.tar.xz` and replaces the tree with it, so it is also how
 the tree is brought up to date. `MAG_SYNC_URL` names another file, and under `MAG_ROOT` the tree goes into `$MAG_ROOT/usr/pkgsrc`.
 By hand it is the same thing:
 
     cd /usr
-    ftp -o pkgsrc.tar.xz https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc.tar.xz
+    ftp -o pkgsrc.tar.xz https://ftp.netbsd.org/pub/pkgsrc/current/pkgsrc.tar.xz
     tar -xf pkgsrc.tar.xz
 
 pkgsrc has a directory per category (`shells`, `editors`, `www`, ...) and a directory per package inside it
