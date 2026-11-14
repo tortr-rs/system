@@ -4,7 +4,6 @@ devel/gmake
 archivers/libarchive
 archivers/pigz
 shells/mksh
-sysutils/dinit
 sys-apps/util-linux
 sys-apps/kmod
 sys-apps/eudev

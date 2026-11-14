@@ -1,0 +1,20 @@
+#!/usr/bin/mksh
+# pid 1 of the live system: mounts what a shell needs, starts udev, and keeps a login on tty1
+export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /dev/shm
+mount -t devpts devpts /dev/pts
+mount -t tmpfs tmpfs /run
+mount -t tmpfs tmpfs /tmp
+chmod 1777 /tmp
+read -r host < /etc/hostname && echo "$host" > /proc/sys/kernel/hostname
+if command -v udevd >/dev/null; then
+	udevd --daemon
+	udevadm trigger
+	udevadm settle
+fi
+while :; do
+	agetty --noclear tty1 linux
+done

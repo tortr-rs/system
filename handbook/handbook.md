@@ -12,7 +12,7 @@ and the package manager is `mag`.
 | musl | the C library |
 | rifle | the coreutils, one C file |
 | mag | the package manager, reads pkgsrc packages as they are |
-| dinit | init and service manager |
+| init | a shell script, `/sbin/init` (files/sbin/init), runs under mksh |
 | mksh | the shell: login shell and `/bin/sh` (the MirBSD Korn shell) |
 | vim | the editor, installed on the ISO |
 | limine | the boot loader |
@@ -143,7 +143,6 @@ start to finish on real hardware yet.)
 
     /etc/profile       PATH, EDITOR=vim
     /etc/ksh.kshrc     prompt and aliases of every ksh
-    /etc/dinit.d/      services
     /etc/fstab, hostname, passwd, group, shells
     /var/lib/mag       what is installed, per package
     /var/cache/mag     downloaded sources
