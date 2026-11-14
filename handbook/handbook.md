@@ -177,7 +177,21 @@ On an NVMe disk the partitions are `/dev/nvme0n1p1` and so on. Replace `sda1`, `
 The FAT partition is `/boot`. The kernel and `limine.conf` end up there, where limine looks for them on both BIOS and
 UEFI.
 
-### 3.3 Building the system
+### 3.3 Copying the live system
+
+The live ISO has no compiler, so on a machine booted from it the system is not built, it is copied. The read-only root of
+the ISO is mounted on `/run/live/rootfs` and the ISO itself on `/run/live/medium`:
+
+    cp -a /run/live/rootfs/. /mnt/
+    cp /run/live/medium/boot/initrd /mnt/boot/initrd
+
+That is the whole base system, kernel and modules included, as it was when the ISO was made. The firmware for wifi
+and some network cards is not on the ISO. Add it with mag once the new system runs (section 4), or skip to 3.4 and build everything instead, which needs a
+machine with a compiler.
+
+Then go on with 3.5 (fstab) and the rest. The kernel is in `/mnt/boot` already.
+
+### 3.4 Building the system from source, instead
 
 Point mag at the repositories (section 2.4) and run chamesle-bootstrap:
 
@@ -212,7 +226,7 @@ before you boot the new system:
 
 Run `mag relocate` again after every `MAG_ROOT=/mnt mag install` that adds programs (section 9.4).
 
-### 3.4 rifle
+### 3.5 rifle
 
 The base set has no coreutils: they come from rifle. Install it into the new root:
 
@@ -227,7 +241,7 @@ Add the packages you want now, or after the first boot:
     MAG_ROOT=/mnt mag install editors/vim
     MAG_ROOT=/mnt mag relocate
 
-### 3.5 fstab
+### 3.6 fstab
 
 `blkid` prints the UUIDs:
 
@@ -239,7 +253,7 @@ wrote:
     UUID=ROOT-UUID  /      ext4  defaults  0 1
     UUID=BOOT-UUID  /boot  vfat  defaults  0 2
 
-### 3.6 Host name, users, password
+### 3.7 Host name, users, password
 
 The host name is already in `/mnt/etc/init.conf` from `-n`. The root account is in `/mnt/etc/passwd` with an `x` in the
 password field, and there is no shadow file, so the hash goes into that field. Make one on any machine that has
@@ -256,7 +270,7 @@ musl's `crypt` reads `$6$` hashes. An empty field means no password at all.
 The groups are `root`, `wheel` (10) and `users` (100). More accounts are lines in `passwd` and `group` and a home
 directory you make (section 6.5).
 
-### 3.7 The kernel and the boot entry
+### 3.8 The kernel and the boot entry
 
 The kernel package put these in `/mnt/boot` (the version number is whatever the recipe carries):
 
@@ -270,10 +284,12 @@ Write `/mnt/boot/limine.conf` with the file name you see and the UUID of the roo
     /Chamesle
         protocol: linux
         path: boot():/vmlinuz-6.18.63-0-lts
-        cmdline: root=UUID=ROOT-UUID rw
+        module_path: boot():/initrd
+        cmdline: root=UUID=ROOT-UUID rw console=tty0
 
-`boot()` is the partition `limine.conf` is on, which is `/boot`. No initramfs is needed for an ext4 root on a common
-disk (section 7.5 says when one is).
+`boot()` is the partition `limine.conf` is on, which is `/boot`. The kernel has ext4 and the disk drivers as modules, so
+the system needs the initramfs. The one from the ISO (`/mnt/boot/initrd`, copied in 3.3) finds the root by `root=UUID=` and
+loads the modules in `iso/profile/modules`. Section 7.5 says how to make your own.
 
 limine's files are in `/mnt/usr/share/limine`.
 
@@ -294,7 +310,7 @@ The firmware starts `EFI/BOOT/BOOTX64.EFI` of the EFI System partition by itself
 
 Do both and the disk boots either way.
 
-### 3.8 First boot
+### 3.9 First boot
 
     umount -R /mnt
     reboot
