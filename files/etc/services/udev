@@ -1,0 +1,9 @@
+#!/bin/sh
+. /etc/services.subr
+procname=udevd
+svc_start() {
+	udevd --daemon || return
+	udevadm trigger && udevadm settle
+}
+svc_stop() { udevadm control --exit; }
+run "$1"

@@ -29,7 +29,7 @@ The parts:
 | rifle  | the coreutils, all in one C file; `cat`, `ls`, `cp` and the rest are links to one program |
 | mag    | the package manager; it reads NetBSD pkgsrc packages as they are, and recipes of its own |
 | mksh   | the shell, login shell and `/bin/sh` |
-| init   | `/sbin/init`, a shell script that runs under mksh |
+| init   | `/sbin/init`, a shell script that runs under mksh, in the style of FreeBSD's: `/etc/rc`, `/etc/init.conf`, services |
 | limine | the boot loader, BIOS and UEFI |
 
 There is nothing from GNU in the system. Two exceptions are on the machine that builds: the kernel's own build tools,
@@ -59,7 +59,7 @@ The PATH of a login shell is `/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`. Pac
 
 | directory | what is in it |
 |-----------|---------------|
-| `system/` | `tools/chamesle-bootstrap`, `files/sbin/init`, `iso/`, this handbook |
+| `system/` | `tools/chamesle-bootstrap`, `files/` (init, rc and the services), `iso/`, this handbook |
 | `mag/`    | `mag.c`, `build.sh`, `tests/run.sh`, `repo/` with the hand recipes and `PROVIDES` |
 | `rifle/`  | `rifle.c`, `build.sh`, `tests/run.sh` |
 | pkgsrc    | NetBSD's package tree, which you fetch yourself (chapter 2) |
@@ -194,8 +194,8 @@ Its usage:
 
 It makes the directories (`bin boot dev etc/skel home lib lib/firmware mnt proc root run sbin srv sys tmp usr/bin
 usr/lib usr/sbin usr/share usr/local/bin var/cache var/lib var/log var/tmp`, with `tmp` and `var/tmp` mode 1777 and
-`root` mode 700), installs `/sbin/init`, writes the first `/etc` files (`passwd`, `group`, `shells`, `hostname`,
-`fstab`, `profile`, `os-release`, `mag.conf`), and builds the base set into the target with `mag`:
+`root` mode 700), installs everything in `files/` (init, rc, the services, `init.conf`), writes the first `/etc` files (`passwd`,
+`group`, `shells`, `fstab`, `profile`, `os-release`, `mag.conf`), and builds the base set into the target with `mag`:
 
     sys-libs/musl devel/gmake archivers/libarchive archivers/pigz shells/mksh sys-apps/util-linux
     sys-apps/kmod sys-apps/eudev net/dhcpcd www/curl sysutils/e2fsprogs sysutils/dosfstools sys-boot/limine
@@ -241,7 +241,7 @@ wrote:
 
 ### 3.6 Host name, users, password
 
-The host name is already in `/mnt/etc/hostname` from `-n`. The root account is in `/mnt/etc/passwd` with an `x` in the
+The host name is already in `/mnt/etc/init.conf` from `-n`. The root account is in `/mnt/etc/passwd` with an `x` in the
 password field, and there is no shadow file, so the hash goes into that field. Make one on any machine that has
 openssl, SHA-512:
 
@@ -254,7 +254,7 @@ Put the output in the second field of the root line:
 musl's `crypt` reads `$6$` hashes. An empty field means no password at all.
 
 The groups are `root`, `wheel` (10) and `users` (100). More accounts are lines in `passwd` and `group` and a home
-directory you make (section 6.3).
+directory you make (section 6.5).
 
 ### 3.7 The kernel and the boot entry
 
@@ -299,12 +299,12 @@ Do both and the disk boots either way.
     umount -R /mnt
     reboot
 
-Take out the installation medium. limine shows the entry for three seconds and boots the kernel. `init` mounts the
-file systems, starts udev and puts a login on tty1. Log in as root.
+Take out the installation medium. limine shows the entry for three seconds and boots the kernel. `init` runs `/etc/rc`, which mounts the
+file systems and starts the services of `init.conf`, and puts a login on the ttys. Log in as root.
 
 Then:
 
-1. Bring the network up (section 6.5).
+1. Bring the network up (section 6.7).
 2. To build on the new machine, fetch the pkgsrc tree (section 2.3) and mag's recipes, and
    `export MAG_REPO=...`; put that line in `/etc/profile` to keep it.
 3. `mag list` shows what the bootstrap put on the machine.
@@ -502,28 +502,100 @@ and remove in a scratch root. It needs curl, tar and the rifle tools in PATH.
 
 ### 6.1 init
 
-`/sbin/init` is a mksh script (`files/sbin/init` in the sources). The kernel starts it as process 1. Step by step:
+`/sbin/init` is a mksh script, and it works the way FreeBSD's init does: the kernel starts it as process 1, it runs
+`/etc/rc`, then it keeps a getty on every tty and waits for a signal. The files are in `files/` in the sources and
+`chamesle-bootstrap` copies them into the root. Step by step:
 
-1. `PATH` is set to `/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`.
-2. `proc` goes on `/proc`, `sysfs` on `/sys`, `devtmpfs` on `/dev`.
-3. `/dev/pts` and `/dev/shm` are made and `devpts` is mounted on `/dev/pts`.
-4. `tmpfs` is mounted on `/run` and on `/tmp`; `/tmp` gets mode 1777.
-5. The host name is read from `/etc/hostname` and written to `/proc/sys/kernel/hostname`.
-6. If `udevd` exists it is started as a daemon, `udevadm trigger` replays the devices that are already there and
-   `udevadm settle` waits until their events are done.
-7. A loop runs `agetty --noclear tty1 linux` and runs it again every time it exits.
+1. `PATH` is set to `/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin`. `proc`, `sysfs` and `devtmpfs`
+   are mounted if they are not yet, and what init prints goes to `/dev/console`.
+2. If `single` is on the kernel command line, init runs `sulogin` first.
+3. `/etc/rc autoboot` runs (6.2). If it fails, init runs `sulogin` and goes on when you leave it.
+4. For every name in `ttys` of `init.conf` that has a node in `/dev`, init starts a loop that runs the getty command
+   again whenever it exits. A getty that dies within five seconds is run again after a pause of five.
+5. init waits. A signal ends the wait:
 
-That is all of it. The kernel mounts `/` itself from `root=` on the command line, the other file systems of
-`/etc/fstab` are not mounted by init, and no services are started. What you want at boot, you add to the script; it is
-yours. To mount everything in `/etc/fstab` at boot, add `mount -a` after the lines for `/run` and `/tmp`.
+| signal | what it does |
+|--------|--------------|
+| `INT`, `TERM` | reboot |
+| `USR1` | halt: stop everything and stay stopped |
+| `USR2` | power off |
 
-### 6.2 The files in /etc
+6. Then it runs `/etc/rc.shutdown`, sends `TERM` to every process, `KILL` two seconds later, runs `sync`, `umount -a -r`
+   and does the last step through `/proc/sysrq-trigger` (`b` or `o`). That needs `CONFIG_MAGIC_SYSRQ` in the kernel;
+   the base set has no `reboot` program of its own that calls the kernel.
+
+### 6.2 rc, init.conf and the services
+
+`/etc/rc` mounts the system. In order: `/` is remounted read-write; with `autoboot`, `fsck -A -R -p` checks the
+other file systems; `devpts` and `/dev/shm` are mounted; a tmpfs goes on `/run` (not on the live ISO, where
+`/run/live` is already there); `mount -a` mounts `/etc/fstab`; `swapon -a`; `/tmp` is emptied if it is not a mount and
+set to mode 1777; the host name is set; `dmesg` is saved in `/var/log/dmesg.boot`. Then every service in
+`boot-services` is started, in the order it is written.
+
+`/etc/init.conf` is the one configuration file. One setting per line, `key = value`, `#` starts a comment, blank
+lines are ignored, spaces around `=` are free. A list is in braces and may go over several lines:
+
+    hostname = chamesle
+
+    # started in this order at boot, stopped in reverse at shutdown
+    #boot-services = {NetworkManager,LightDM,dbus}
+    boot-services = {udev,modules,network}
+
+    modules = {}
+    ttys = {tty1,ttyS0}
+    getty = agetty --noclear $tty linux
+    getty-ttyS0 = agetty -L $tty 115200 vt100
+
+| key | meaning |
+|-----|---------|
+| `hostname` | the host name |
+| `boot-services` | the services started at boot, in order; shutdown stops them in reverse |
+| `modules` | kernel modules the `modules` service loads with `modprobe` |
+| `ttys` | the ttys that get a getty |
+| `getty` | the getty command; `$tty` is the tty name |
+| `getty-NAME` | the getty command for that tty alone |
+
+The parser is `conf` in `/etc/init.sh`; `conf KEY` prints the value, with a list separated by spaces. A change to
+`ttys` or `getty` takes effect at the next boot.
+
+A service is an executable file in `/etc/services` (or `/usr/local/etc/services`, for the ones you add) that takes
+`start`, `stop`, `restart` or `status`. The base set has three: `udev` (starts `udevd`, replays the devices and waits
+for them), `modules` and `network` (`dhcpcd`). A name in `boot-services` without a script is skipped with one line
+saying so.
+
+`service` is the way to run them:
+
+    service -l                 every service
+    service -e                 the services of boot-services, as paths
+    service network restart
+    service udev status
+
+To add a service, write the script, make it executable, and put its name in `boot-services`. With
+`/etc/services.subr` it is short. Set `procname` to the name the process shows in `/proc/PID/comm`, write
+`svc_start`, and finish with `run "$1"`; `stop` then kills that process, `status` looks for it and `start` refuses to
+start it twice. Override `svc_stop` and `svc_status` if the defaults do not fit:
+
+    #!/bin/sh
+    . /etc/services.subr
+    procname=chronyd
+    svc_start() { chronyd; }
+    run "$1"
+
+### 6.3 Shutting down
+
+`reboot`, `halt` and `poweroff` send `INT`, `USR1` and `USR2` to init. `shutdown -r`, `-h` or `-p` does the same, at
+once (`now`) or after `+minutes`, with an optional message sent through `wall`:
+
+    shutdown -r now
+    shutdown -p +10 back in ten minutes
+
+### 6.4 The files in /etc
 
 | file | what it holds |
 |------|---------------|
 | `passwd`, `group` | accounts and groups; no shadow file, the hash is in `passwd` |
 | `shells` | `/bin/sh`, `/usr/bin/mksh`, `/usr/bin/ksh` |
-| `hostname` | the host name |
+| `init.conf` | host name, boot services, modules, ttys (6.2) |
 | `fstab` | `proc`, `sysfs`, `tmpfs` on `/tmp`, plus the lines you add |
 | `profile` | `PATH`, `EDITOR=vim`, `PAGER=less`, `umask 022` |
 | `os-release` | `NAME=Chamesle`, `ID=chamesle` |
@@ -533,7 +605,7 @@ yours. To mount everything in `/etc/fstab` at boot, add `mount -a` after the lin
 The login shell is mksh and `/etc/profile` is read by login shells. For a prompt and aliases make `~/.mkshrc` and set
 `ENV=$HOME/.mkshrc` in `/etc/profile`.
 
-### 6.3 Users
+### 6.5 Users
 
 There is no `useradd`. To add `alice`:
 
@@ -545,23 +617,21 @@ There is no `useradd`. To add `alice`:
 `HASH` comes from `openssl passwd -6` on a machine that has it. To put alice in `wheel`, add her name to the last field
 of the `wheel:x:10:` line.
 
-### 6.4 udev and modules
+### 6.6 udev and modules
 
 eudev is the udev. `udevd` gives devices their nodes in `/dev` and loads the modules the hardware needs. eudev is built
 without the hardware database (`--disable-hwdb`).
 
 kmod provides `modprobe`, `insmod`, `rmmod`, `lsmod`, `modinfo` and `depmod`. A kernel's modules are in
-`/lib/modules/VERSION`. To load one by hand: `modprobe name`. To load one at every boot, add `modprobe name` to
-`/sbin/init` before the `agetty` loop. To keep one from loading, put `blacklist name` in a file in `/etc/modprobe.d/`.
+`/lib/modules/VERSION`. To load one by hand: `modprobe name`. To load one at every boot, put its name in `modules` of `/etc/init.conf`. To keep one from loading, put `blacklist name` in a file in `/etc/modprobe.d/`.
 
-### 6.5 Networking
+### 6.7 Networking
 
 `dhcpcd` is the DHCP client and is in the base set. For a wired interface:
 
     dhcpcd eth0
 
-`dhcpcd` without arguments takes every interface. To have it up at boot add a `dhcpcd` line to `/sbin/init` before the
-`agetty` loop. `/sys/class/net/` lists the interfaces. For `ip`, install iproute2 from Chamesle's repo:
+`dhcpcd` without arguments takes every interface. It is the `network` service, in `boot-services` by default, so it is up at boot. `/sys/class/net/` lists the interfaces. For `ip`, install iproute2 from Chamesle's repo:
 
     mag install net-misc/iproute2
 
@@ -572,7 +642,7 @@ A static address:
     ip route add default via 192.168.1.1
     echo 'nameserver 192.168.1.1' > /etc/resolv.conf
 
-### 6.6 Wireless
+### 6.8 Wireless
 
 `iw` talks to the kernel's nl80211. It is in Chamesle's repo, with libnl:
 
@@ -589,7 +659,7 @@ For an open network `iw dev wlan0 connect NAME` is enough. For WPA the connectio
 tree has it (`mag search wpa`), install it, give it a configuration file with the `ssid` and the `psk`, and run it on the
 interface. Then `dhcpcd wlan0`.
 
-### 6.7 Mounting and disks
+### 6.9 Mounting and disks
 
     mount /dev/sdb1 /mnt/usb
     mount -t vfat -o ro /dev/sdb1 /mnt/usb
@@ -597,19 +667,6 @@ interface. Then `dhcpcd wlan0`.
 
 `mount`, `umount`, `lsblk`, `blkid`, `sfdisk` and `fdisk` are util-linux's, `mkfs.ext4` and `fsck.ext4` are
 e2fsprogs', `mkfs.fat` is dosfstools'.
-
-### 6.8 Shutting down
-
-There is no shutdown script. To stop a machine, flush and unmount by hand, and use the kernel's SysRq interface if your
-kernel has it (`grep MAGIC_SYSRQ /boot/config-*`):
-
-    sync
-    umount -a
-    echo s > /proc/sysrq-trigger     sync
-    echo u > /proc/sysrq-trigger     remount read-only
-    echo o > /proc/sysrq-trigger     power off (b reboots)
-
-Put those in a script of your own in `/usr/local/bin` if you use them often.
 
 
 ## 7. The kernel and firmware
@@ -874,10 +931,11 @@ into a staging directory and prints where the files are.
 
 | path | what |
 |------|------|
-| `/sbin/init` | the init script, run by mksh |
+| `/sbin/init`, `/etc/rc`, `/etc/rc.shutdown` | init, the boot script, the shutdown script, all run by mksh |
+| `/etc/init.conf` | host name, boot services, modules, ttys |
+| `/etc/services/`, `/usr/local/etc/services/` | the service scripts |
 | `/etc/profile` | `PATH`, `EDITOR`, `PAGER`, `umask` |
 | `/etc/passwd`, `/etc/group`, `/etc/shells` | accounts, groups, login shells |
-| `/etc/hostname` | host name |
 | `/etc/fstab` | file systems |
 | `/etc/os-release` | `NAME=Chamesle`, `ID=chamesle` |
 | `/etc/mag.conf` | mag's build settings: `JOBS`, `CFLAGS`, `PKG_DEFAULT_OPTIONS`, `PKG_OPTIONS.name` |
@@ -897,7 +955,7 @@ into a staging directory and prints where the files are.
 | path | what |
 |------|------|
 | `system/tools/chamesle-bootstrap` | makes a root file system and builds the base set into it |
-| `system/files/sbin/init` | the init script that goes into every root |
+| `system/files/` | init, rc, `service`, `init.conf` and the service scripts that go into every root |
 | `system/iso/mkiso` | builds the live ISO |
 | `system/iso/mkinitramfs` | builds an initramfs |
 | `system/iso/init` | the first process in the initramfs |

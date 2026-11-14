@@ -1,20 +1,54 @@
 #!/usr/bin/mksh
-# pid 1 of the live system: mounts what a shell needs, starts udev, and keeps a login on tty1
-export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-mount -t proc proc /proc
-mount -t sysfs sysfs /sys
-mount -t devtmpfs devtmpfs /dev
-mkdir -p /dev/pts /dev/shm
-mount -t devpts devpts /dev/pts
-mount -t tmpfs tmpfs /run
-mount -t tmpfs tmpfs /tmp
-chmod 1777 /tmp
-read -r host < /etc/hostname && echo "$host" > /proc/sys/kernel/hostname
-if command -v udevd >/dev/null; then
-	udevd --daemon
-	udevadm trigger
-	udevadm settle
-fi
-while :; do
-	agetty --noclear tty1 linux
+# pid 1: runs /etc/rc, keeps the gettys of init.conf alive, and stops the machine on a signal.
+# INT and TERM reboot, USR1 halts, USR2 powers off
+export PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys || mount -t sysfs sysfs /sys
+mountpoint -q /dev || mount -t devtmpfs devtmpfs /dev
+exec < /dev/console > /dev/console 2>&1
+
+stop=
+trap 'stop=reboot' INT TERM
+trap 'stop=halt' USR1
+trap 'stop=poweroff' USR2
+
+read -r cmdline < /proc/cmdline
+case " $cmdline " in *" single "*) sulogin;; esac
+/etc/rc autoboot || sulogin
+
+. /etc/init.sh
+respawn() {
+	(
+		trap - INT TERM USR1 USR2
+		while :; do
+			t=$SECONDS
+			eval "$2"
+			[ $((SECONDS - t)) -gt 5 ] || sleep 5
+		done
+	) &
+}
+for tty in $(conf ttys); do
+	[ -c /dev/$tty ] || continue
+	cmd=$(conf getty-$tty)
+	respawn $tty "${cmd:-$(conf getty)}"
 done
+
+while [ -z "$stop" ]; do
+	sleep 86400 &
+	wait $!
+	kill $! 2>/dev/null
+done
+
+/etc/rc.shutdown
+kill -s TERM -- -1
+sleep 2
+kill -s KILL -- -1
+sync
+umount -a -r
+echo 1 > /proc/sys/kernel/sysrq
+case $stop in
+reboot) echo "rebooting"; echo b > /proc/sysrq-trigger;;
+poweroff) echo "powering off"; echo o > /proc/sysrq-trigger;;
+esac
+echo "halted"
+while :; do sleep 86400; done

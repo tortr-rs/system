@@ -1,6 +1,6 @@
 #!/bin/sh
 # chamesle-bootstrap TARGET: makes a root file system in TARGET, like debootstrap does for Debian.
-# the directories, the files in /etc, then every package of the base set built and installed there with mag.
+# the directories, init and its files from files/, the files in /etc, then every package of the base set built and installed there with mag.
 #   chamesle-bootstrap /mnt/root
 #   chamesle-bootstrap -r ~/repos/ports -s "shells/mksh editors/vim" /srv/chroot
 set -e
@@ -30,18 +30,37 @@ command -v mag >/dev/null || { echo "chamesle-bootstrap: mag is not in PATH" >&2
 [ "$(id -u)" = 0 ] || echo "chamesle-bootstrap: not root, so files will belong to you and the device nodes are skipped" >&2
 mkdir -p "$target"
 cd "$target"
-for d in bin boot dev etc/skel home lib lib/firmware mnt proc root run sbin srv sys tmp usr/bin usr/lib usr/sbin usr/share usr/local/bin var/cache var/lib var/log var/tmp; do
+for d in bin boot dev etc/skel home lib lib/firmware mnt proc root run sbin srv sys tmp usr/bin usr/lib usr/sbin usr/share usr/local/bin usr/local/etc/services var/cache var/lib var/log var/tmp; do
 	mkdir -p "$d"
 done
 chmod 1777 tmp var/tmp
 chmod 700 root
-install -Dm755 "$here/../files/sbin/init" sbin/init
+ln -sfn ../run var/run
+files=$here/../files
+put() {
+	for f in "$1"/*; do
+		d=${f#"$files"/}
+		if [ -d "$f" ]; then
+			mkdir -p "$d"
+			put "$f"
+		elif [ -x "$f" ]; then
+			install -m755 "$f" "$d"
+		elif [ "$d" = etc/init.conf ]; then
+			[ -e "$d" ] || while IFS= read -r l; do
+				case $l in hostname*) l="hostname = $name";; esac
+				echo "$l"
+			done < "$f" > "$d"
+		else
+			install -m644 "$f" "$d"
+		fi
+	done
+}
+put "$files"
 [ -e etc/passwd ] || cat > etc/passwd <<P
 root:x:0:0:root:/root:/usr/bin/mksh
 P
 [ -e etc/group ] || printf 'root:x:0:\nwheel:x:10:\nusers:x:100:\n' > etc/group
 [ -e etc/shells ] || printf '/bin/sh\n/usr/bin/mksh\n/usr/bin/ksh\n' > etc/shells
-[ -e etc/hostname ] || echo "$name" > etc/hostname
 [ -e etc/fstab ] || printf '# device  mount  type  options  dump pass\nproc /proc proc defaults 0 0\nsysfs /sys sysfs defaults 0 0\ntmpfs /tmp tmpfs mode=1777 0 0\n' > etc/fstab
 [ -e etc/profile ] || cat > etc/profile <<'P'
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin

@@ -1,0 +1,18 @@
+#!/bin/sh
+# shutdown -r|-h|-p [now|+minutes] [message]
+usage() { echo "usage: shutdown -r|-h|-p [now|+minutes] [message]" >&2; exit 2; }
+case $1 in
+-r) sig=INT;;
+-h) sig=USR1;;
+-p) sig=USR2;;
+*) usage;;
+esac
+shift
+when=${1:-now}
+[ $# -gt 0 ] && shift
+case $when in
+now) ;;
++[0-9]*) [ $# -gt 0 ] && wall "$*"; sleep $((${when#+} * 60));;
+*) usage;;
+esac
+exec kill -s $sig 1

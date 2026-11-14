@@ -1,0 +1,5 @@
+#!/bin/sh
+. /etc/services.subr
+procname=dhcpcd
+svc_start() { dhcpcd; }
+run "$1"

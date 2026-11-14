@@ -1,0 +1,22 @@
+#!/bin/sh
+# run by init at boot
+. /etc/init.sh
+mount -o remount,rw / || echo "rc: / stays read-only" >&2
+if [ "$1" = autoboot ]; then
+	fsck -A -R -p -T
+	case $? in 0|1) ;; *) echo "rc: the file system check failed" >&2; exit 1;; esac
+fi
+mkdir -p /dev/pts /dev/shm
+mountpoint -q /dev/pts || mount -t devpts devpts /dev/pts
+mountpoint -q /dev/shm || mount -t tmpfs -o mode=1777 tmpfs /dev/shm
+[ -d /run/live ] || mountpoint -q /run || mount -t tmpfs tmpfs /run
+mount -a
+swapon -a
+mountpoint -q /tmp || rm -rf /tmp/* /tmp/.[!.]*
+chmod 1777 /tmp
+host=$(conf hostname)
+[ -n "$host" ] && echo "$host" > /proc/sys/kernel/hostname
+dmesg > /var/log/dmesg.boot
+for s in $(conf boot-services); do
+	service "$s" start
+done

@@ -1,0 +1,10 @@
+#!/bin/sh
+. /etc/init.sh
+. /etc/services.subr
+svc_start() {
+	for m in $(conf modules); do
+		modprobe "$m" || log "cannot load $m"
+	done
+}
+svc_stop() { :; }
+run "$1"
