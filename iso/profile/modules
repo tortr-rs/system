@@ -11,8 +11,11 @@ uas
 xhci_pci
 ehci_pci
 ahci
-nvme
+ata_piix
+ata_generic
+pata_acpi
 virtio_blk
+nvme
 virtio_pci
 virtio_scsi
 ext4
