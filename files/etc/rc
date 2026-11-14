@@ -11,6 +11,7 @@ mountpoint -q /dev/pts || mount -t devpts devpts /dev/pts
 mountpoint -q /dev/shm || mount -t tmpfs -o mode=1777 tmpfs /dev/shm
 [ -d /run/live ] || mountpoint -q /run || mount -t tmpfs tmpfs /run
 mount -a
+command -v zfs >/dev/null && zfs mount -a
 swapon -a
 mountpoint -q /tmp || rm -rf /tmp/* /tmp/.[!.]*
 chmod 1777 /tmp

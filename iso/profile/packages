@@ -15,3 +15,5 @@ sys-boot/limine
 sys-kernel/linux
 sys-firmware/wireless-regdb
 editors/vim
+sys-fs/zfs
+sys-kernel/zfs-module

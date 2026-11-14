@@ -2,6 +2,7 @@
 # mkiso: builds the Chamesle live ISO from a profile.
 #   mkiso -r $HOME/src/mag/repo:/usr/pkgsrc
 #   mkiso -R /srv/rootfs -o chamesle.iso
+#   MAGREPO=$HOME/src/mag/repo mkiso ...  the recipes the image carries for mag search and info
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 profile=$here/profile
@@ -18,6 +19,11 @@ while getopts p:r:R:w:o: o; do
 	esac
 done
 export MAG_REPO
+if [ -z "$MAGREPO" ]; then
+	for d in "$here/../../mag/repo" $(echo "$MAG_REPO" | tr : ' '); do
+		[ -f "$d/PROVIDES" ] && { MAGREPO=$d; break; }
+	done
+fi
 : "${MKISOFS:=xorriso -as mkisofs}"
 : "${LIMINE:=/usr/share/limine}"
 die() { echo "mkiso: $*" >&2; exit 1; }
@@ -45,7 +51,13 @@ MAG_ROOT=$rootfs MAG_PREFIX=/usr "$MAG" relocate ${from:+"$from"}
 rm -rf "$rootfs"/var/cache/mag "$rootfs"/var/tmp/mag "$rootfs"/usr/include "$rootfs"/usr/lib/pkgconfig "$rootfs"/lib/firmware
 find "$rootfs"/usr/lib -name "*.a" -o -name "*.la" | xargs rm -f
 tar -C "$profile/overlay" -cf - . | tar -C "$rootfs" -xf -
-install -Dm755 "$here/../tools/chamesle-bootstrap" "$rootfs/usr/bin/chamesle-bootstrap"
+for t in chamesle-bootstrap chamesle-chroot chamesle-disk; do
+	install -Dm755 "$here/../tools/$t" "$rootfs/usr/bin/$t"
+done
+if [ -n "$MAGREPO" ]; then
+	mkdir -p "$rootfs/usr/share/mag/repo"
+	cp -R "$MAGREPO/." "$rootfs/usr/share/mag/repo/"
+fi
 install -Dm644 "$here/../handbook/handbook.md" "$rootfs/usr/share/doc/chamesle/handbook.md"
 install -Dm755 "$MAG" "$rootfs/usr/bin/mag"
 vmlinuz=$(ls "$rootfs"/boot/vmlinuz-* | head -n 1)
@@ -53,6 +65,7 @@ kver=$(ls "$rootfs/lib/modules" | head -n 1)
 [ -f "$vmlinuz" ] && [ -n "$kver" ] || die "no kernel in the root: boot/vmlinuz-* and lib/modules/* are missing"
 cp "$vmlinuz" "$iso/boot/vmlinuz"
 
+depmod -b "$rootfs" "$kver"
 "$here/mkinitramfs" -m "$profile/modules" "$rootfs" "$kver" "$iso/boot/initrd"
 
 rm -f "$iso/LiveOS/rootfs.sfs"

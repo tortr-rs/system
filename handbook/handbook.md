@@ -17,8 +17,8 @@
 ### 1.1 What it is
 
 Chamesle is a Linux distribution you build from source and put on a disk yourself. There is no installer: you
-partition, format, build the root file system, write the configuration and the boot entry by hand. This handbook goes
-through every step.
+install the root file system, write the configuration and the boot entry by hand. `chamesle-disk` partitions and formats the
+disk for you if you want, and this handbook goes through every other step.
 
 The parts:
 
@@ -37,7 +37,7 @@ and `gmake`, which musl's Makefile needs.
 
 The package repository is NetBSD's pkgsrc, read directly by `mag` without `bmake`. Chamesle adds hand-written recipes
 only for what pkgsrc does not have: musl, the kernel, its headers and firmware, limine, eudev, kmod, util-linux, iw,
-libnl, iproute2, usbutils, netbsd-curses and libtool. Everything is built on the machine that installs it, so the first
+libnl, iproute2, usbutils, netbsd-curses, libtool and ZFS. Everything is built on the machine that installs it, so the first
 install takes a while (LLVM is the longest).
 
 ### 1.2 The layout of the system
@@ -59,7 +59,7 @@ The PATH of a login shell is `/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`. Pac
 
 | directory | what is in it |
 |-----------|---------------|
-| `system/` | `tools/chamesle-bootstrap`, `files/` (init, rc and the services), `iso/`, this handbook |
+| `system/` | `tools/` (`chamesle-bootstrap`, `chamesle-chroot`, `chamesle-disk`), `files/` (init, rc and the services), `iso/`, this handbook |
 | `mag/`    | `mag.c`, `build.sh`, `tests/run.sh`, `repo/` with the hand recipes and `PROVIDES` |
 | `rifle/`  | `rifle.c`, `build.sh`, `tests/run.sh` |
 | pkgsrc    | NetBSD's package tree, which you fetch yourself (chapter 2) |
@@ -98,7 +98,13 @@ Put `mag` in your PATH:
 
 ### 2.3 Getting the pkgsrc tree
 
-Take a pkgsrc tree from NetBSD and unpack it where you want it, for example `/usr/pkgsrc`:
+Let mag fetch a pkgsrc tree from NetBSD and unpack it into `/usr/pkgsrc`:
+
+    mag sync
+
+`sync` downloads `https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc.tar.xz` and replaces the tree with it, so it is also how
+the tree is brought up to date. `MAG_SYNC_URL` names another file, and under `MAG_ROOT` the tree goes into `$MAG_ROOT/usr/pkgsrc`.
+By hand it is the same thing:
 
     cd /usr
     curl -fsSLO https://cdn.netbsd.org/pub/pkgsrc/current/pkgsrc.tar.xz
@@ -114,7 +120,8 @@ when both have a package of the same name:
 
     export MAG_REPO=$HOME/src/mag/repo:/usr/pkgsrc
 
-If `MAG_REPO` is not set, mag looks in `/usr/share/mag/repo`. `MAG_ROOT` says where to install; it is the new root
+If `MAG_REPO` is not set, mag looks in `/usr/share/mag/repo` (Chamesle's own recipes, which the live ISO and every
+bootstrapped root carry) and then in `/usr/pkgsrc`, where `mag sync` puts the tree. `MAG_ROOT` says where to install; it is the new root
 during an installation (chapter 3) and unset on a running system.
 
 A file called `PROVIDES` in a repo tells mag how our recipes meet pkgsrc's. Its lines are:
@@ -136,6 +143,7 @@ For example `converters/libiconv -` (musl has iconv) and `needs editors/vim dev-
 * `JOBS` is `$JOBS` in the build steps, the number to give `make -j`. Without it mag uses 4
 * `CFLAGS`, `CXXFLAGS`, `CPPFLAGS` and `LDFLAGS` are set for every build
 * `PKG_DEFAULT_OPTIONS` and `PKG_OPTIONS.name` set pkgsrc options (section 4.6)
+* `CONFIGURE_ARGS.name` adds arguments to the `configure` of one pkgsrc package, such as `CONFIGURE_ARGS.libtirpc=--disable-gssapi`
 
 The environment wins over the file: `MAG_JOBS`, `CFLAGS` and the others, when set, are used as they are.
 
@@ -145,17 +153,44 @@ The environment wins over the file: `MAG_JOBS`, `CFLAGS` and the others, when se
 ## 3. Installing by hand
 
 Follow the BIOS or the UEFI variant where they differ. The disk here is `/dev/sda`; change it to yours. Everything below
-is run as root on the machine you install from, and it erases the disk.
+is run as root on the machine you install from, usually the live ISO, and it erases the disk.
 
-### 3.1 Partitioning
+There are two ways through 3.1 and 3.2: `chamesle-disk` does the partitioning and the file systems and leaves the
+root on ZFS, or you do both yourself. From 3.3 on the steps are the same, and they are yours: `chamesle-disk` is only a helper.
 
-Three partitions on a GPT. The layout works for both ways of booting, so you can choose later.
+### 3.1 chamesle-disk
+
+    chamesle-disk /dev/sda
+
+It lists the disk and asks you to type its name before it touches anything. Then it starts `cfdisk` so you lay out the
+partitions. Three of them work for BIOS and UEFI both:
 
 | partition | size | type | use |
 |-----------|------|------|-----|
-| `sda1` | 1M | BIOS boot | limine's BIOS code, not used on UEFI |
-| `sda2` | 512M | EFI System | `/boot`, FAT32 |
-| `sda3` | the rest | Linux filesystem | `/` |
+| 1 | 1M | BIOS boot | limine's BIOS code, not used on UEFI |
+| 2 | 512M | EFI System | `/boot`, FAT32 |
+| 3 | the rest | Linux filesystem | `/`, ZFS |
+
+Write the table and quit cfdisk. chamesle-disk lists the partitions and asks which one is the boot partition and which is
+the root. Then it does, in this order:
+
+    mkfs.fat -F32 BOOT
+    zpool create -f -o ashift=12 -O compression=zstd -O acltype=posixacl -O xattr=sa -O mountpoint=none -R /mnt rpool ROOT
+    zfs create -o mountpoint=/ -o canmount=noauto rpool/root
+    zfs create -o mountpoint=/home rpool/home
+    zfs create -o mountpoint=/var rpool/var
+    zpool set bootfs=rpool/root rpool
+
+and mounts `rpool/root`, `rpool/home` and `rpool/var` under `/mnt` and the boot partition on `/mnt/boot`. It also writes
+`/mnt/etc/fstab` with the boot partition by UUID and the `proc`, `sysfs` and `tmpfs` lines (an existing one is left alone). It writes nothing else: no
+`limine.conf`, no host name, no password. Those are 3.7 and 3.8.
+
+ZFS mounts its own datasets, so the fstab does not list them. limine cannot read ZFS: the kernel, the initrd and
+`limine.conf` live on the FAT partition, which is `/boot`, and the initramfs imports the pool (3.8).
+
+### 3.2 Partitioning and file systems by hand
+
+For a root on ext4. The layout is the one in 3.1, `sda1` to `sda3`:
 
     sfdisk /dev/sda <<P
     label: gpt
@@ -166,8 +201,6 @@ Three partitions on a GPT. The layout works for both ways of booting, so you can
 
 On an NVMe disk the partitions are `/dev/nvme0n1p1` and so on. Replace `sda1`, `sda2` and `sda3` throughout.
 
-### 3.2 File systems and mounting
-
     mkfs.fat -F32 /dev/sda2
     mkfs.ext4 /dev/sda3
     mount /dev/sda3 /mnt
@@ -175,19 +208,29 @@ On an NVMe disk the partitions are `/dev/nvme0n1p1` and so on. Replace `sda1`, `
     mount /dev/sda2 /mnt/boot
 
 The FAT partition is `/boot`. The kernel and `limine.conf` end up there, where limine looks for them on both BIOS and
-UEFI.
+UEFI. The root can be ZFS by hand as well: the `zpool` and `zfs` lines of 3.1 are all there is to it.
 
 ### 3.3 Copying the live system
 
 The live ISO has no compiler, so on a machine booted from it the system is not built, it is copied. The read-only root of
 the ISO is mounted on `/run/live/rootfs` and the ISO itself on `/run/live/medium`:
 
-    cp -a /run/live/rootfs/. /mnt/
+    tar -C /run/live/rootfs --exclude ./etc/fstab -cf - . | tar -C /mnt -xpf -
+    [ -e /mnt/etc/fstab ] || cp /run/live/rootfs/etc/fstab /mnt/etc/fstab
     cp /run/live/medium/boot/initrd /mnt/boot/initrd
 
-That is the whole base system, kernel and modules included, as it was when the ISO was made. The firmware for wifi
-and some network cards is not on the ISO. Add it with mag once the new system runs (section 4), or build everything instead (3.4), which needs a
+That is the whole base system, kernel, modules and ZFS included, as it was when the ISO was made. The copy keeps the
+fstab chamesle-disk wrote. The firmware for wifi and some network cards is not on the ISO. Add it with mag once the new system runs (section 4), or build everything instead (3.4), which needs a
 machine with a compiler.
+
+Work inside the new root with `chamesle-chroot`:
+
+    chamesle-chroot /mnt
+    chamesle-chroot /mnt passwd root
+
+It mounts `proc`, `sys`, `dev`, `dev/pts` and a tmpfs on `run` under the directory, copies `/etc/resolv.conf` into it, runs
+`chroot` with an empty environment (`HOME=/root`, `TERM`, `PATH`) and takes the mounts away again when the command ends. Without a command it
+starts `/usr/bin/mksh -l`.
 
 Then go on with 3.6 (fstab) and the rest. rifle (3.5) is on the ISO already, skip it. The kernel is in `/mnt/boot` already.
 
@@ -214,6 +257,12 @@ usr/lib usr/sbin usr/share usr/local/bin var/cache var/lib var/log var/tmp`, wit
     sys-libs/musl devel/gmake archivers/libarchive archivers/pigz shells/mksh sys-apps/util-linux
     sys-apps/kmod sys-apps/eudev net/dhcpcd www/curl sysutils/e2fsprogs sysutils/dosfstools sys-boot/limine
     sys-kernel/linux sys-kernel/linux-firmware sys-firmware/sof-firmware sys-firmware/wireless-regdb editors/vim
+    sys-fs/zfs sys-kernel/zfs-module lang/clang devel/lld lang/compiler-rt lang/libunwind
+
+`lang/clang` (with `lang/llvm` under it), `devel/lld`, `lang/compiler-rt` and `lang/libunwind` are the compiler of the new
+system: it builds what `mag install` asks for after `mag sync`, so no other machine is needed. They are the longest part of the bootstrap.
+It also copies the recipes of the first repo that has a `PROVIDES` file into `/usr/share/mag/repo`, installs `chamesle-chroot` and
+`chamesle-disk`, and runs `depmod`.
 
 The sources go in `/mnt/var/cache/mag` and are not fetched twice. An existing file in `/etc` is never overwritten, so
 the script can be run again after a failure. A build that fails stops and names the directory it left behind.
@@ -243,15 +292,19 @@ Add the packages you want now, or after the first boot:
 
 ### 3.6 fstab
 
-`blkid` prints the UUIDs:
+If you used chamesle-disk the file is written. Look at it: the boot partition by UUID on `/boot`, then `proc`, `sysfs`
+and `tmpfs`, and nothing for the ZFS datasets, because ZFS mounts them itself.
+
+By hand, `blkid` prints the UUIDs:
 
     blkid /dev/sda2 /dev/sda3
 
-Open `/mnt/etc/fstab` and add the root and boot lines under the `proc`, `sysfs` and `tmpfs` lines chamesle-bootstrap
-wrote:
+Open `/mnt/etc/fstab` and add the root and boot lines under the `proc`, `sysfs` and `tmpfs` lines already there:
 
     UUID=ROOT-UUID  /      ext4  defaults  0 1
     UUID=BOOT-UUID  /boot  vfat  defaults  0 2
+
+A root on ZFS gets only the boot line. Check that the UUID is the one `blkid` shows for the boot partition.
 
 ### 3.7 Host name, users, password
 
@@ -287,9 +340,14 @@ Write `/mnt/boot/limine.conf` with the file name you see and the UUID of the roo
         module_path: boot():/initrd
         cmdline: root=UUID=ROOT-UUID rw console=tty0
 
-`boot()` is the partition `limine.conf` is on, which is `/boot`. The kernel has ext4 and the disk drivers as modules, so
-the system needs the initramfs. The one from the ISO (`/mnt/boot/initrd`, copied in 3.3) finds the root by `root=UUID=` and
-loads the modules in `iso/profile/modules`. Section 7.5 says how to make your own.
+For a root on ZFS the command line names the dataset, there is no UUID:
+
+        cmdline: root=ZFS=rpool/root rw console=tty0
+
+`boot()` is the partition `limine.conf` is on, which is `/boot`; with ZFS it is the FAT partition, since limine cannot read
+ZFS. The kernel has ext4 and the disk drivers as modules, so
+the system needs the initramfs. The one from the ISO (`/mnt/boot/initrd`, copied in 3.3) finds the root by `root=UUID=` or
+`root=ZFS=` and loads the modules in `iso/profile/modules`. Section 7.5 says how to make your own.
 
 limine's files are in `/mnt/usr/share/limine`.
 
@@ -313,7 +371,10 @@ Do both and the disk boots either way.
 ### 3.9 First boot
 
     umount -R /mnt
+    zpool export rpool
     reboot
+
+Leave out `zpool export` if the root is not on ZFS.
 
 Take out the installation medium. limine shows the entry for three seconds and boots the kernel. `init` runs `/etc/rc`, which mounts the
 file systems and starts the services of `init.conf`, and puts a login on the ttys. Log in as root.
@@ -321,8 +382,8 @@ file systems and starts the services of `init.conf`, and puts a login on the tty
 Then:
 
 1. Bring the network up (section 6.7).
-2. To build on the new machine, fetch the pkgsrc tree (section 2.3) and mag's recipes, and
-   `export MAG_REPO=...`; put that line in `/etc/profile` to keep it.
+2. `mag sync` fetches the pkgsrc tree (section 2.3). Mag's own recipes are in `/usr/share/mag/repo` already and the
+   default `MAG_REPO` covers both, so `mag install name` works from then on, and the compiler is in the base set.
 3. `mag list` shows what the bootstrap put on the machine.
 
 
@@ -344,6 +405,7 @@ Then:
     deps PKG          its dependencies, rdeps PKG for what needs it
     fetch PKG...      only download and check the sources
     build PKG         build into a stage directory, install nothing
+    sync              download the pkgsrc tree to /usr/pkgsrc
     hash FILE...      sha256 of files, for writing recipes
 
     -n  only say what would happen    -f  go on when files clash or something needs the package
@@ -398,7 +460,8 @@ puts the real paths back:
 | variable | meaning | default |
 |----------|---------|---------|
 | `MAG_ROOT`   | where to install | `/` |
-| `MAG_REPO`   | repositories, split by colons | `/usr/share/mag/repo` |
+| `MAG_REPO`   | repositories, split by colons | `/usr/share/mag/repo:/usr/pkgsrc` |
+| `MAG_SYNC_URL` | the file `mag sync` fetches | NetBSD's `pkgsrc.tar.xz` |
 | `MAG_FETCH`  | the download command, given a file and a URL | `curl -fsSL -o` |
 | `MAG_PREFIX` | `$PREFIX` in the steps | `/usr` |
 | `MAG_JOBS`   | `$JOBS` in the steps | `JOBS` of mag.conf, else 4 |
@@ -681,8 +744,11 @@ interface. Then `dhcpcd wlan0`.
     mount -t vfat -o ro /dev/sdb1 /mnt/usb
     umount /mnt/usb
 
-`mount`, `umount`, `lsblk`, `blkid`, `sfdisk` and `fdisk` are util-linux's, `mkfs.ext4` and `fsck.ext4` are
+`mount`, `umount`, `lsblk`, `blkid`, `sfdisk`, `fdisk` and `cfdisk` are util-linux's, `zpool` and `zfs` are OpenZFS's, `mkfs.ext4` and `fsck.ext4` are
 e2fsprogs', `mkfs.fat` is dosfstools'.
+
+On a ZFS root, `/etc/rc` runs `zfs mount -a` right after `mount -a`, which mounts `rpool/home` and `rpool/var`; the root itself was
+mounted by the initramfs.
 
 
 ## 7. The kernel and firmware
@@ -747,7 +813,8 @@ release is a new `version` and `sha256` in `repo/sys-kernel/linux-firmware`, the
 
 ### 7.5 An initramfs
 
-A root on ext4 on a common disk (SATA, NVMe, virtio, USB storage) needs none. A root that needs a module to be reached, or
+A root on ext4 on a common disk (SATA, NVMe, virtio, USB storage) needs none. A root on ZFS needs one: the pool has to be
+imported before the root can be mounted. A root that needs a module to be reached, or
 RAID, LVM or an encrypted disk, does.
 
 `iso/mkinitramfs` makes one, and the live ISO uses it:
@@ -755,15 +822,17 @@ RAID, LVM or an encrypted disk, does.
     mkinitramfs [-m modules-file] ROOTFS KVER OUT
 
 `ROOTFS` is the root whose `/lib/modules` and programs are used, `KVER` the name of the kernel's directory in
-`/lib/modules`, `OUT` the file to write. It puts in a few tools (`sh mount umount switch_root insmod mkdir sleep blkid`
+`/lib/modules`, `OUT` the file to write. It puts in a few tools (`sh mount umount switch_root insmod mkdir sleep blkid`, and `zpool` when the root has it,
 with the libraries they need), the modules named in the modules file together with what they depend on, and `iso/init`.
+The names after a `[zfs]` line of the modules file go into a second list, which `iso/init` loads only for `root=ZFS=`.
 The result is a zstd compressed cpio.
 
     $HOME/src/system/iso/mkinitramfs -m modules /mnt 6.18.63-0-lts /mnt/boot/initrd
 
 `iso/init` mounts `proc`, `sysfs` and `devtmpfs`, loads the modules, reads `root=` from the command line (`root=UUID=...`
 or a device), waits up to 15 seconds for the device, mounts it read-only at `/mnt/root`, and runs
-`switch_root /mnt/root /sbin/init`. If anything fails it prints why and drops into a shell.
+`switch_root /mnt/root /sbin/init`. With `root=ZFS=rpool/root` it loads the zfs modules, runs `zpool import -N -d /dev rpool`
+(until it works, 15 seconds at most) and mounts the dataset with `mount -o zfsutil -t zfs`. If anything fails it prints why and drops into a shell.
 
 Name the initrd in `limine.conf`:
 
@@ -773,13 +842,17 @@ Name the initrd in `limine.conf`:
         module_path: boot():/initrd
         cmdline: root=UUID=ROOT-UUID rw
 
+On ZFS the command line is `root=ZFS=rpool/root rw`. The ZFS module is `sys-kernel/zfs-module`, for the kernel of
+`sys-kernel/linux`: when one is updated the other has to be too, and `depmod` has to run after installing it.
+
 
 ## 8. The live ISO
 
 ### 8.1 What it is
 
 The ISO is a live system to work from. It boots on BIOS and UEFI machines with limine, from a disc or a stick, and has
-mksh, vim, mag, `chamesle-bootstrap`, the disk tools (`sfdisk`, `mkfs.ext4`, `mkfs.fat`) and this handbook in
+mksh, vim, mag with Chamesle's recipes (`mag search` and `mag info` work before `mag sync`), `chamesle-bootstrap`,
+`chamesle-chroot`, `chamesle-disk`, the disk tools (`cfdisk`, `sfdisk`, `mkfs.ext4`, `mkfs.fat`, `zpool`, `zfs`) and this handbook in
 `/usr/share/doc/chamesle/handbook.md`. It is where you do chapter 3 on a machine that has nothing on it.
 
 ### 8.2 Building
@@ -791,6 +864,8 @@ The machine that builds needs `mksquashfs` (filesystems/squashfs), `xorriso` (sy
 
 The usage:
 
+    chamesle-chroot DIR [COMMAND...]
+    chamesle-disk DISK
     mkiso [-p profile] [-r repos] [-R rootfs] [-w workdir] [-o out.iso]
 
 * `-p` is the profile directory (default `iso/profile`)
@@ -800,14 +875,15 @@ The usage:
 * `-o` is the file to write (default `chamesle.iso`)
 
 Environment: `LIMINE` is where limine's files are (default `/usr/share/limine`), `MKISOFS` is the command that makes the
-ISO (default `xorriso -as mkisofs`), `MAG` is the mag to put into the image.
+ISO (default `xorriso -as mkisofs`), `MAG` is the mag to put into the image, `MAGREPO` the repo whose recipes it carries
+in `/usr/share/mag/repo` (default: the `repo` next to a mag checkout, else the first `MAG_REPO` entry with a `PROVIDES` file).
 
 In order:
 
 1. `chamesle-bootstrap` builds a root from `profile/packages`, with the host name `chamesle-live`.
 2. `profile/overlay` is copied over it.
-3. `chamesle-bootstrap`, the handbook and `mag` are put into it.
-4. The kernel from `boot/vmlinuz-*` is copied to the ISO.
+3. `chamesle-bootstrap`, `chamesle-chroot`, `chamesle-disk`, the handbook, `mag` and its recipes are put into it.
+4. The kernel from `boot/vmlinuz-*` is copied to the ISO, and `depmod` runs on the root.
 5. `mkinitramfs` makes `boot/initrd` from `profile/modules`.
 6. The root is written as a zstd squashfs, `LiveOS/rootfs.sfs`.
 7. limine's boot files are copied and `profile/limine.conf` becomes `boot/limine/limine.conf`.
@@ -832,7 +908,7 @@ the root yourself and hand it over:
 
 `packages` is the base set of chapter 3. `modules` lists `squashfs overlay loop isofs sr_mod cdrom sd_mod usb_storage uas
 xhci_pci ehci_pci ahci ata_piix ata_generic pata_acpi virtio_blk nvme virtio_pci virtio_scsi ext4 vfat nls_cp437
-nls_iso8859_1`, one per line. The boot entry:
+nls_iso8859_1`, one per line, then a `[zfs]` line and `zfs`, which only a root on ZFS loads. The boot entry:
 
     timeout: 3
 
@@ -875,7 +951,7 @@ To write the ISO to a stick: `dd if=chamesle.iso of=/dev/sdX bs=4M conv=fsync`.
     mag upgrade
 
 The first says what would be rebuilt, the second reinstalls whatever the repos have a newer version of. pkgsrc itself is
-updated by unpacking a new tarball over the old tree (section 2.3). One package: `mag install name`. When you work with
+updated with `mag sync` (section 2.3). One package: `mag install name`. When you work with
 `MAG_ROOT` set, run `mag relocate` afterwards.
 
 ### 9.2 Cleaning up
@@ -965,12 +1041,16 @@ into a staging directory and prints where the files are.
 | `/var/cache/mag/` | downloaded sources |
 | `/usr/share/limine/` | limine's boot files, for installing it |
 | `/usr/share/doc/chamesle/handbook.md` | this book, on the live ISO |
+| `/usr/share/mag/repo/` | Chamesle's recipes |
+| `/usr/pkgsrc/` | the pkgsrc tree, from `mag sync` |
 
 ### 10.2 In the sources
 
 | path | what |
 |------|------|
 | `system/tools/chamesle-bootstrap` | makes a root file system and builds the base set into it |
+| `system/tools/chamesle-chroot` | chroot with the pseudo file systems mounted |
+| `system/tools/chamesle-disk` | cfdisk, vfat boot partition, ZFS root, mounted on `/mnt` |
 | `system/files/` | init, rc, `service`, `init.conf` and the service scripts that go into every root |
 | `system/iso/mkiso` | builds the live ISO |
 | `system/iso/mkinitramfs` | builds an initramfs |
@@ -984,7 +1064,8 @@ into a staging directory and prints where the files are.
 | `mag/tests/run.sh` | tests on a fake repo: install, upgrade, remove in a scratch root |
 | `mag/repo/PROVIDES` | pkgsrc packages replaced or skipped, and dependencies added |
 | `mag/repo/sys-libs/musl` | the libc |
-| `mag/repo/sys-kernel/{linux,linux-headers,linux-firmware}` | kernel, headers, firmware |
+| `mag/repo/sys-kernel/{linux,linux-headers,linux-firmware,zfs-module}` | kernel, headers, firmware, the ZFS module |
+| `mag/repo/sys-fs/zfs` | ZFS userland: `zpool`, `zfs` |
 | `mag/repo/sys-boot/limine` | the boot loader |
 | `mag/repo/sys-apps/{eudev,kmod,util-linux,usbutils}` | udev, module tools, the basics, usb tools |
 | `mag/repo/net-libs/libnl`, `net-wireless/iw`, `net-misc/iproute2` | network tools |
@@ -998,6 +1079,6 @@ into a staging directory and prints where the files are.
     chamesle-bootstrap [-r REPOS] [-s PACKAGES] [-n HOSTNAME] TARGET
     mkiso [-p profile] [-r repos] [-R rootfs] [-w workdir] [-o out.iso]
     mkinitramfs [-m modules] ROOTFS KVER OUT
-    mag [-nfk] install|remove|upgrade|autoremove|list|info|search|files|owns|deps|rdeps|fetch|build|relocate|hash
+    mag [-nfk] install|remove|upgrade|autoremove|list|info|search|files|owns|deps|rdeps|fetch|build|sync|relocate|hash
     rifle --install DIR | --list
     limine bios-install DEVICE
