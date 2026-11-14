@@ -58,9 +58,10 @@ put() {
 put "$files"
 [ -e etc/passwd ] || cat > etc/passwd <<P
 root:x:0:0:root:/root:/usr/bin/mksh
+dhcpcd:x:200:200:dhcpcd:/var/db/dhcpcd:/bin/false
 dbus:x:81:81:system bus:/run/dbus:/bin/false
 P
-[ -e etc/group ] || printf 'root:x:0:\nbin:x:1:\ndaemon:x:2:\nsys:x:3:\nadm:x:4:\ntty:x:5:\ndisk:x:6:\nlp:x:7:\nmem:x:8:\nkmem:x:9:\nwheel:x:10:\nfloppy:x:11:\nmail:x:12:\nuucp:x:14:\nman:x:15:\naudio:x:18:\ncdrom:x:19:\ndialout:x:20:\ntape:x:26:\nvideo:x:27:\ninput:x:97:\nkvm:x:78:\nrender:x:105:\nclock:x:106:\nusers:x:100:\ndbus:x:81:\n' > etc/group
+[ -e etc/group ] || printf 'root:x:0:\nbin:x:1:\ndaemon:x:2:\nsys:x:3:\nadm:x:4:\ntty:x:5:\ndisk:x:6:\nlp:x:7:\nmem:x:8:\nkmem:x:9:\nwheel:x:10:\nfloppy:x:11:\nmail:x:12:\nuucp:x:14:\nman:x:15:\naudio:x:18:\ncdrom:x:19:\ndialout:x:20:\ntape:x:26:\nvideo:x:27:\ninput:x:97:\nkvm:x:78:\nrender:x:105:\nclock:x:106:\nsgx:x:107:\nusers:x:100:\ndhcpcd:x:200:\ndbus:x:81:\n' > etc/group
 [ -e etc/shells ] || printf '/bin/sh\n/usr/bin/mksh\n/usr/bin/ksh\n' > etc/shells
 [ -e etc/fstab ] || printf '# device  mount  type  options  dump pass\nproc /proc proc defaults 0 0\nsysfs /sys sysfs defaults 0 0\ntmpfs /tmp tmpfs mode=1777 0 0\n' > etc/fstab
 [ -e etc/profile ] || cat > etc/profile <<'P'

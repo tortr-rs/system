@@ -15,6 +15,9 @@ command -v zfs >/dev/null && zfs mount -a
 swapon -a
 mountpoint -q /tmp || rm -rf /tmp/* /tmp/.[!.]*
 chmod 1777 /tmp
+mkdir -p /var/log /var/db /var/lib /var/cache /var/tmp
+chmod 1777 /var/tmp
+[ -e /var/run ] || ln -s ../run /var/run
 host=$(conf hostname)
 [ -n "$host" ] && echo "$host" > /proc/sys/kernel/hostname
 dmesg > /var/log/dmesg.boot

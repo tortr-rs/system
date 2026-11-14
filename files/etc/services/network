@@ -1,5 +1,5 @@
 #!/bin/sh
 . /etc/services.subr
 procname=dhcpcd
-svc_start() { dhcpcd; }
+svc_start() { mkdir -p /var/db/dhcpcd /run/dhcpcd; dhcpcd; }
 run "$1"
