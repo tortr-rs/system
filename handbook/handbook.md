@@ -1,0 +1,90 @@
+# The Chamesle handbook
+
+Chamesle is a Linux system you build from source and keep small. The kernel is the only thing in it that comes
+from outside the Unix family: the C library is musl, the shell is ksh, the packages come from NetBSD's pkgsrc
+and the package manager is `mag`.
+
+## What is in it
+
+| part | what it is |
+|---|---|
+| kernel | Linux 6.18, built by you (chapter 3) |
+| musl | the C library |
+| rifle | the coreutils, one C file |
+| mag | the package manager, reads pkgsrc packages as they are |
+| dinit | init and service manager |
+| oksh | the login shell (the OpenBSD ksh), `/bin/sh` is dash |
+| vim | the editor, installed on the ISO |
+| limine | the boot loader |
+
+## 1. Getting a root file system
+
+`tools/chamesle-bootstrap` is to Chamesle what debootstrap is to Debian. It makes the directories and the files in
+`/etc`, then builds and installs the base packages into the directory you give it with `mag`:
+
+    MAG_REPO=$HOME/src/mag/repo:/usr/pkgsrc chamesle-bootstrap /mnt/root
+
+Building everything from source takes a while (LLVM is the long one). Packages are not built twice: the sources
+are kept in `var/cache/mag` inside the target.
+
+`-s "shells/oksh editors/vim"` installs your own list, `-n name` sets the host name, `-k kernel.tar.xz` unpacks a
+kernel from chapter 3 into the target.
+
+## 2. mag
+
+    mag install editors/vim     fetch, check the checksum, build, install, dependencies first
+    mag remove vim
+    mag upgrade                 rebuild what has a newer version
+    mag search word | info pkg | files pkg | owns /path | deps pkg | list
+
+`MAG_REPO` is a list of repos split by colons. Two kinds of package live in them and can be mixed:
+
+* our own recipes, `category/name`, a file with `url`, `sha256`, `deps` and plain sh `steps`
+* NetBSD pkgsrc packages, a directory with a `Makefile`, a `distinfo` and `patches/`, read without `bmake`
+
+A file called `PROVIDES` in a repo says which of our packages stands in for a pkgsrc one (so a pkgsrc package gets
+our zlib and not a second one) and which dependencies a pkgsrc Makefile forgets (`needs`). Everything lands in
+`$MAG_ROOT`, nothing is ever installed over a file another package owns, and `/etc` files you changed stay.
+
+## 3. Building the kernel on the MSI
+
+The MSI is the machine the kernel has to boot on, so it is the one that knows what hardware there is. Any
+Linux that already runs on it will do for the building.
+
+Step one. Tell us what is in the machine:
+
+    sh kernel/collect-hw.sh        # writes hw.txt: cpu, pci, usb, loaded modules, UEFI or BIOS. no serial numbers, no addresses
+
+Step two. Build:
+
+    sh kernel/build.sh             # config of the running kernel as the start, safe and big
+    sh kernel/build.sh small       # only what the machine uses right now (plug in everything you own first)
+
+It downloads linux-6.18.63 from kernel.org, checks the checksum, builds `bzImage` and the modules and packs them into
+`~/chamesle-kernel/chamesle-kernel-6.18.63.tar.xz`. It needs gcc or clang, make, flex, bison, bc, perl, curl, xz.
+On a recent MSI with many cores it takes a quarter of an hour, with `small` less.
+
+Step three. Get the files to the computer that builds Chamesle. Any of these:
+
+* **a USB stick:** copy `chamesle-kernel-6.18.63.tar.xz`, `chamesle-kernel-6.18.63.sha256` and `hw.txt` onto it
+* **over the network with nc:** on the receiving computer `nc -l 9000 > kernel.tar.xz`, on the MSI
+  `nc ADDRESS 9000 < chamesle-kernel-6.18.63.tar.xz` (address is what `ip -4 addr` shows on the receiving one)
+* **the MSI serves, the other fetches:** on the MSI `cd ~/chamesle-kernel && python3 -m http.server 8000`, on the
+  other `curl -O http://MSI-ADDRESS:8000/chamesle-kernel-6.18.63.tar.xz`
+* **scp** works when sshd runs on the receiving side
+
+Check it on arrival: `sha256sum -c chamesle-kernel-6.18.63.sha256`.
+
+## 4. The ISO
+
+One ISO boots on any machine and has oksh as the login shell and vim installed. It is a squashfs root file system
+made by `chamesle-bootstrap`, the kernel from chapter 3 and limine on top. The builder is not written yet.
+
+## 5. Files
+
+    /etc/profile       PATH, EDITOR=vim
+    /etc/ksh.kshrc     prompt and aliases of every ksh
+    /etc/dinit.d/      services
+    /etc/fstab, hostname, passwd, group, shells
+    /var/lib/mag       what is installed, per package
+    /var/cache/mag     downloaded sources
