@@ -13,7 +13,7 @@ and the package manager is `mag`.
 | rifle | the coreutils, one C file |
 | mag | the package manager, reads pkgsrc packages as they are |
 | dinit | init and service manager |
-| oksh | the login shell (the OpenBSD ksh), `/bin/sh` is dash |
+| mksh | the shell: login shell and `/bin/sh` (the MirBSD Korn shell) |
 | vim | the editor, installed on the ISO |
 | limine | the boot loader |
 
@@ -27,7 +27,7 @@ and the package manager is `mag`.
 Building everything from source takes a while (LLVM is the long one). Packages are not built twice: the sources
 are kept in `var/cache/mag` inside the target.
 
-`-s "shells/oksh editors/vim"` installs your own list, `-n name` sets the host name, `-k kernel.tar.xz` unpacks a
+`-s "shells/mksh editors/vim"` installs your own list, `-n name` sets the host name, `-k kernel.tar.xz` unpacks a
 kernel from chapter 3 into the target.
 
 ## 2. mag
@@ -98,7 +98,7 @@ and UEFI machines with limine.
 What it does, in order: `chamesle-bootstrap` builds a root from `iso/profile/packages`, the files of
 `iso/profile/overlay` are copied over it, the kernel tarball from chapter 3 is unpacked into it, `mkinitramfs`
 makes the initrd (a few static tools, the modules in `iso/profile/modules` with what they depend on, `iso/init`),
-the root becomes a zstd squashfs, and `xorriso` writes the ISO with limine's BIOS and UEFI boot images.
+the root becomes a zstd squashfs, and `mkisofs` writes the ISO with limine's BIOS and UEFI boot images.
 `-R dir` uses a root you already have instead of building one (it is copied, not changed).
 
 At boot `init` looks for the medium that has `LiveOS/rootfs.sfs`, mounts it read-only, puts a tmpfs overlay over it,
@@ -114,8 +114,10 @@ Try an ISO without a machine:
     qemu-system-x86_64 -cpu max -m 1G -cdrom chamesle.iso -boot d
     qemu-system-x86_64 -cpu max -m 1G -bios /usr/share/qemu/edk2-x86_64-code.fd -cdrom chamesle.iso   # uefi
 
-mkiso needs `mksquashfs`, `xorriso` (or any mkisofs: set `MKISOFS`), `zstd`, `bsdcpio` and `limine` on the machine
-that builds. `LIMINE` says where limine's files are (default /usr/share/limine).
+mkiso needs `mksquashfs` (filesystems/squashfs), `mkisofs` (sysutils/cdrtools, `MKISOFS` says which one), `zstd`,
+`bsdcpio` and `limine` on the machine that builds. cdrtools' mkisofs makes an ISO that boots on BIOS machines and virtual machines from a CD. Limine's UEFI boot needs the
+EFI image as a GPT partition inside the ISO, which only xorriso can write: for an ISO that boots on UEFI and from a stick,
+build with `MKISOFS="xorriso -as mkisofs"`. `LIMINE` says where limine's files are (default /usr/share/limine).
 
 ## 5. Files
 

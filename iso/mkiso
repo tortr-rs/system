@@ -19,12 +19,12 @@ while getopts p:r:k:R:w:o: o; do
 	esac
 done
 export MAG_REPO
-: "${MKISOFS:=xorriso -as mkisofs}"
+: "${MKISOFS:=mkisofs}"
 : "${LIMINE:=/usr/share/limine}"
 die() { echo "mkiso: $*" >&2; exit 1; }
 [ -n "$kernel" ] || die "no kernel: build one with kernel/build.sh and give it with -k"
 [ -d "$LIMINE" ] && [ -f "$LIMINE/limine-bios-cd.bin" ] || die "no limine files in $LIMINE (set LIMINE)"
-for t in mksquashfs xorriso zstd bsdcpio limine; do command -v $t >/dev/null || die "$t is not installed"; done
+for t in mksquashfs ${MKISOFS%% *} zstd bsdcpio limine; do command -v $t >/dev/null || die "$t is not installed"; done
 
 iso=$work/iso
 mkdir -p "$work"
@@ -57,9 +57,13 @@ cp "$LIMINE"/limine-bios.sys "$LIMINE"/limine-bios-cd.bin "$LIMINE"/limine-uefi-
 cp "$LIMINE"/BOOTX64.EFI "$iso/EFI/BOOT/"
 cp "$profile/limine.conf" "$iso/boot/limine/limine.conf"
 
+case $MKISOFS in
+xorriso*) efi="--efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label" ;;
+*) efi="-eltorito-alt-boot -eltorito-platform efi -b boot/limine/limine-uefi-cd.bin -no-emul-boot"
+   echo "mkiso: $MKISOFS cannot make the uefi image a partition, so this ISO boots on bios only; use MKISOFS=\"xorriso -as mkisofs\" for uefi" >&2 ;;
+esac
 $MKISOFS -R -r -J -V CHAMESLE \
 	-b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table \
-	--efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label \
-	-o "$out" "$iso" 2>/dev/null
-limine bios-install "$out" >/dev/null
+	$efi -o "$out" "$iso" >/dev/null 2>&1 || { echo "mkiso: $MKISOFS failed" >&2; exit 1; }
+limine bios-install "$out" >/dev/null 2>&1 || echo "mkiso: no hybrid boot sector: the ISO boots from a CD or a virtual machine, not from a stick" >&2
 echo "$out: $(du -h "$out" | cut -f1)"

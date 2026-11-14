@@ -3,8 +3,7 @@ sys-libs/musl
 dev-build/gmake
 app-arch/libarchive
 app-arch/pigz
-app-shells/dash
-app-shells/oksh
+shells/mksh
 sys-apps/dinit
 sys-apps/util-linux
 sys-apps/kmod

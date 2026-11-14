@@ -2,7 +2,7 @@
 # chamesle-bootstrap TARGET: makes a root file system in TARGET, like debootstrap does for Debian.
 # the directories, the files in /etc, then every package of the base set built and installed there with mag.
 #   chamesle-bootstrap /mnt/root
-#   chamesle-bootstrap -r ~/repos/ports -s "shells/oksh editors/vim" /srv/chroot
+#   chamesle-bootstrap -r ~/repos/ports -s "shells/mksh editors/vim" /srv/chroot
 set -e
 usage() {
 	echo "usage: chamesle-bootstrap [-r REPOS] [-s PACKAGES] [-n HOSTNAME] [-k KERNEL.tar.xz] TARGET" >&2
@@ -12,7 +12,7 @@ usage() {
 	echo "  -k  a kernel tarball made by kernel/build.sh, unpacked into TARGET" >&2
 	exit 2
 }
-base="sys-libs/musl dev-build/gmake app-arch/libarchive app-arch/pigz app-shells/dash app-shells/oksh sys-apps/dinit sys-apps/util-linux sys-apps/kmod sys-apps/eudev net-misc/dhcpcd net-misc/curl sys-fs/e2fsprogs sys-fs/dosfstools sys-boot/limine editors/vim"
+base="sys-libs/musl dev-build/gmake app-arch/libarchive app-arch/pigz shells/mksh sys-apps/dinit sys-apps/util-linux sys-apps/kmod sys-apps/eudev net-misc/dhcpcd net-misc/curl sys-fs/e2fsprogs sys-fs/dosfstools sys-boot/limine editors/vim"
 name=chamesle
 while getopts r:s:n:k: o; do
 	case $o in
@@ -37,10 +37,10 @@ done
 chmod 1777 tmp var/tmp
 chmod 700 root
 [ -e etc/passwd ] || cat > etc/passwd <<P
-root:x:0:0:root:/root:/usr/bin/oksh
+root:x:0:0:root:/root:/usr/bin/mksh
 P
 [ -e etc/group ] || printf 'root:x:0:\nwheel:x:10:\nusers:x:100:\n' > etc/group
-[ -e etc/shells ] || printf '/bin/sh\n/usr/bin/oksh\n/usr/bin/dash\n' > etc/shells
+[ -e etc/shells ] || printf '/bin/sh\n/usr/bin/mksh\n/usr/bin/ksh\n' > etc/shells
 [ -e etc/hostname ] || echo "$name" > etc/hostname
 [ -e etc/fstab ] || printf '# device  mount  type  options  dump pass\nproc /proc proc defaults 0 0\nsysfs /sys sysfs defaults 0 0\ntmpfs /tmp tmpfs mode=1777 0 0\n' > etc/fstab
 [ -e etc/profile ] || cat > etc/profile <<'P'
@@ -49,15 +49,10 @@ export EDITOR=vim
 export PAGER=less
 umask 022
 P
-[ -e etc/ksh.kshrc ] || cat > etc/ksh.kshrc <<'P'
-PS1='\u@\h:\w\$ '
-alias ls='ls -F'
-P
 [ -e etc/os-release ] || printf 'NAME=Chamesle\nID=chamesle\nPRETTY_NAME="Chamesle"\n' > etc/os-release
 export MAG_ROOT=$PWD MAG_PREFIX=/usr MAG_REPO
 echo "installing: $base"
 mag install $base
-ln -sf dash usr/bin/sh 2>/dev/null || true
 [ -e bin/sh ] || ln -s ../usr/bin/sh bin/sh 2>/dev/null || true
 if [ -n "$kernel" ]; then
 	echo "kernel: $kernel"
