@@ -50,7 +50,7 @@ export PAGER=less
 umask 022
 P
 [ -e etc/os-release ] || printf 'NAME=Chamesle\nID=chamesle\nPRETTY_NAME="Chamesle"\n' > etc/os-release
-[ -e etc/mag.conf ] || printf '# read by mag, same syntax as pkgsrc mk.conf\nJOBS=%s\nCFLAGS=-O2 -std=gnu17\n' "$(nproc 2>/dev/null || echo 4)" > etc/mag.conf
+[ -e etc/mag.conf ] || printf '# read by mag, same syntax as pkgsrc mk.conf\nJOBS=%s\nCFLAGS=-O2 -std=gnu17\nPKG_OPTIONS.curl=-idn\n' "$(nproc 2>/dev/null || echo 4)" > etc/mag.conf
 export MAG_ROOT=$PWD MAG_PREFIX=/usr MAG_REPO
 echo "installing: $base"
 mag install $base
