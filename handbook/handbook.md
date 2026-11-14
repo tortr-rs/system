@@ -68,34 +68,78 @@ and `sha256` in `repo/sys-kernel/linux`. The firmware is `sys-kernel/linux-firmw
 
 ## 4. The ISO
 
-The ISO is an installer: it boots a small live system, and `chamesle-install` puts that on a disk. It boots on BIOS
-and UEFI machines with limine.
+The ISO is a live system to install from, nothing more. There is no installer: Chamesle is put on a disk by hand
+(chapter 5). It boots on BIOS and UEFI machines with limine, from a CD or a stick, and has mksh, vim, mag,
+`chamesle-bootstrap`, the disk tools (sfdisk, mkfs.ext4, mkfs.fat) and this handbook in `/usr/share/doc/chamesle/`.
 
     iso/mkiso -r $HOME/src/mag/repo:/usr/pkgsrc
 
 What it does, in order: `chamesle-bootstrap` builds a root from `iso/profile/packages`, the files of
-`iso/profile/overlay` are copied over it, `mkinitramfs`
+`iso/profile/overlay`, the handbook, `mag` and `chamesle-bootstrap` are copied over it, `mkinitramfs`
 makes the initrd (a few static tools, the modules in `iso/profile/modules` with what they depend on, `iso/init`),
 the root becomes a zstd squashfs, and `xorriso` writes the ISO with limine's BIOS and UEFI boot images.
 `-R dir` uses a root you already have instead of building one (it is copied, not changed).
 
 At boot `init` looks for the medium that has `LiveOS/rootfs.sfs`, mounts it read-only, puts a tmpfs overlay over it,
-and switches into the result. The medium and the squashfs stay mounted under `/run/live/`, which is where the
-installer copies from. An installed system boots with `root=UUID=...` on the same initrd.
-
-`chamesle-install` asks for the disk, a host name and a root password, then makes a GPT with a 1M BIOS boot
-partition, a 512M EFI partition (also `/boot`) and the rest as ext4, copies the system, writes fstab and
-limine.conf and installs limine for both BIOS and UEFI.
+and switches into the result. The medium and the squashfs stay mounted under `/run/live/`.
 
 Try an ISO without a machine:
 
     qemu-system-x86_64 -cpu max -m 1G -cdrom chamesle.iso -boot d
     qemu-system-x86_64 -cpu max -m 1G -bios /usr/share/qemu/edk2-x86_64-code.fd -cdrom chamesle.iso   # uefi
 
-mkiso needs `mksquashfs` (filesystems/squashfs), `xorriso` (sysutils/libisoburn), `zstd`, `bsdcpio` and `limine` on the
-machine that builds. The ISO boots on BIOS and UEFI machines, from a CD and from a stick (dd it). `LIMINE` says where limine's files are (default /usr/share/limine).
+mkiso needs `mksquashfs` (filesystems/squashfs), `xorriso` (sysutils/libisoburn), `zstd`, `bsdcpio`, `limine` and `mag`
+on the machine that builds. `LIMINE` says where limine's files are (default /usr/share/limine), `MAG` where mag is.
 
-## 5. Files
+## 5. Installing by hand
+
+Boot the ISO, log in as root, bring the network up (`dhcpcd`) and do this. `sda` is the disk, change it.
+
+1. Partition: a GPT with a 1M BIOS boot partition, a 512M EFI partition and the rest for `/`.
+
+        sfdisk /dev/sda <<P
+        label: gpt
+        size=1M, type=21686148-6449-6E6F-744E-656564454649
+        size=512M, type=U
+        type=L
+        P
+        mkfs.fat -F32 /dev/sda2
+        mkfs.ext4 /dev/sda3
+
+2. Mount them. The EFI partition is `/boot`.
+
+        mount /dev/sda3 /mnt
+        mkdir /mnt/boot
+        mount /dev/sda2 /mnt/boot
+
+3. Get a pkgsrc tree and mag's own recipes somewhere on the live system and point mag at them,
+   `export MAG_REPO=/path/to/repo:/path/to/pkgsrc`.
+
+4. Make the root: `chamesle-bootstrap -n yourhostname /mnt`. It builds the base set from source, kernel included,
+   and takes a while. Add what you want after that with `MAG_ROOT=/mnt mag install ...`.
+
+5. Set the password, fstab and the boot entry by hand. `blkid` gives the UUIDs.
+
+        echo 'root:x:0:0:root:/root:/usr/bin/mksh' > /mnt/etc/passwd   # then put a hash in the second field
+        vim /mnt/etc/fstab
+        cp /mnt/usr/share/limine/BOOTX64.EFI /mnt/boot/EFI/BOOT/
+        vim /mnt/boot/limine.conf
+
+   limine.conf:
+
+        timeout: 3
+        /Chamesle
+            protocol: linux
+            path: boot():/vmlinuz-6.18.63-0-lts
+            cmdline: root=UUID=THE-ROOT-UUID rw
+
+6. Install limine for BIOS and unmount: `limine bios-install /dev/sda`, `umount -R /mnt`, reboot.
+
+An initramfs is not needed: the Alpine kernel has the common storage and ext4 drivers as modules, so for a root on
+anything but a plain disk, build your own and put it in limine.conf as `module_path`. (This chapter has not been run
+start to finish on real hardware yet.)
+
+## 6. Files
 
     /etc/profile       PATH, EDITOR=vim
     /etc/ksh.kshrc     prompt and aliases of every ksh

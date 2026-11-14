@@ -1,5 +1,5 @@
 #!/bin/sh
-# mkiso: builds the Chamesle installer ISO from a profile.
+# mkiso: builds the Chamesle live ISO from a profile.
 #   mkiso -r $HOME/src/mag/repo:/usr/pkgsrc
 #   mkiso -R /srv/rootfs -o chamesle.iso
 set -e
@@ -40,6 +40,10 @@ else
 fi
 
 tar -C "$profile/overlay" -cf - . | tar -C "$rootfs" -xf -
+install -Dm755 "$here/../tools/chamesle-bootstrap" "$rootfs/usr/bin/chamesle-bootstrap"
+install -Dm644 "$here/../handbook/handbook.md" "$rootfs/usr/share/doc/chamesle/handbook.md"
+[ -n "$MAG" ] || MAG=$(command -v mag) || die "no mag: put it in PATH or set MAG"
+install -Dm755 "$MAG" "$rootfs/usr/bin/mag"
 vmlinuz=$(ls "$rootfs"/boot/vmlinuz-* | head -n 1)
 kver=$(ls "$rootfs/lib/modules" | head -n 1)
 [ -f "$vmlinuz" ] && [ -n "$kver" ] || die "no kernel in the root: boot/vmlinuz-* and lib/modules/* are missing"

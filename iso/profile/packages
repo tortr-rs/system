@@ -1,4 +1,4 @@
-# what goes into the installer image
+# what goes into the live image
 sys-libs/musl
 devel/gmake
 archivers/libarchive
