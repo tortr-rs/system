@@ -1,5 +1,5 @@
 #!/usr/bin/mksh
-# pid 1: runs /etc/rc, keeps the gettys of init.conf alive, and stops the machine on a signal.
+# winchester, pid 1: runs /etc/rc, keeps the gettys of init.conf alive, and stops the machine on a signal.
 # INT and TERM reboot, USR1 halts, USR2 powers off
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin
 mountpoint -q /proc || mount -t proc proc /proc

@@ -29,7 +29,7 @@ The parts:
 | rifle  | the coreutils, all in one C file; `cat`, `ls`, `cp` and the rest are links to one program |
 | mag    | the package manager; it reads NetBSD pkgsrc packages as they are, and recipes of its own |
 | mksh   | the shell, login shell and `/bin/sh` |
-| init   | `/sbin/init`, a shell script that runs under mksh, in the style of FreeBSD's: `/etc/rc`, `/etc/init.conf`, services |
+| init   | Winchester, `/sbin/init`, a shell script that runs under mksh, in the style of FreeBSD's: `/etc/rc`, `/etc/init.conf`, services |
 | limine | the boot loader, BIOS and UEFI |
 
 There is nothing from GNU in the system. Two exceptions are on the machine that builds: the kernel's own build tools,
@@ -581,7 +581,7 @@ and remove in a scratch root. It needs ftp, tar and the rifle tools in PATH.
 
 ### 6.1 init
 
-`/sbin/init` is a mksh script, and it works the way FreeBSD's init does: the kernel starts it as process 1, it runs
+The init is called Winchester. `/sbin/init` is a mksh script, and it works the way FreeBSD's init does: the kernel starts it as process 1, it runs
 `/etc/rc`, then it keeps a getty on every tty and waits for a signal. The files are in `files/` in the sources and
 `chamesle-bootstrap` copies them into the root. Step by step:
 

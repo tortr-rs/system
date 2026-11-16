@@ -12,7 +12,7 @@ usage() {
 	echo "  -n  host name of the new system (default chamesle)" >&2
 	exit 2
 }
-base="sys-libs/musl devel/gmake archivers/libarchive app-arch/bsdtar archivers/pigz shells/mksh sys-apps/util-linux sys-apps/kmod sys-apps/eudev net/dhcpcd net/tnftp sysutils/e2fsprogs sysutils/dosfstools sys-boot/limine sys-kernel/linux sys-kernel/linux-firmware sys-firmware/sof-firmware sys-firmware/wireless-regdb editors/vim sys-fs/zfs sys-kernel/zfs-module lang/clang devel/lld lang/compiler-rt lang/libunwind"
+base="sys-libs/musl devel/gmake lang/nawk archivers/libarchive app-arch/bsdtar archivers/pigz shells/mksh sys-apps/util-linux sys-apps/kmod sys-apps/eudev net/dhcpcd net/tnftp sysutils/e2fsprogs sysutils/dosfstools sys-boot/limine sys-kernel/linux sys-kernel/linux-firmware sys-firmware/sof-firmware sys-firmware/wireless-regdb editors/vim sys-fs/zfs sys-kernel/zfs-module lang/clang devel/lld lang/compiler-rt lang/libunwind"
 name=chamesle
 while getopts r:s:n: o; do
 	case $o in
