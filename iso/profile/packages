@@ -31,7 +31,7 @@ x11/setxkbmap
 x11/xrdb
 x11/xf86-video-vesa
 x11/xf86-video-fbdev
-x11/xf86-input-keyboard
-x11/xf86-input-mouse
+dev-libs/libevdev
+x11-drivers/xf86-input-evdev
 fonts/dejavu-ttf
 fonts/fontconfig

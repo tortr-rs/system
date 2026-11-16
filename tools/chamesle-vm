@@ -1,0 +1,102 @@
+#!/bin/sh
+# chamesle-vm: runs the Chamesle ISO or an installed disk in qemu, in this terminal, no window.
+#   chamesle-vm iso              boot the live ISO with an empty disk attached, to install onto
+#   chamesle-vm disk             boot the disk that was installed
+#   chamesle-vm install          wipe the disk and put the live system on it, typing the steps into the vm for you
+#   chamesle-vm reset            throw the disk away and make an empty one
+#   chamesle-vm -g iso           same, but with a window
+# the console is this terminal: ctrl-a x leaves qemu, ctrl-a c switches to the qemu monitor.
+# the disk is UEFI, so /boot is the EFI partition and limine goes to EFI/BOOT/BOOTX64.EFI.
+#   ISO=path DISK=path SIZE=16G MEM=2048 CPUS=2 chamesle-vm iso
+die() { echo "chamesle-vm: $*" >&2; exit 1; }
+dir=${VMDIR:-$HOME/chamesle-build/vm}
+: "${ISO:=$HOME/chamesle-build/iso-out/chamesle.iso}"
+: "${DISK:=$dir/disk.img}"
+: "${SIZE:=16G}"
+: "${MEM:=2048}"
+: "${CPUS:=2}"
+: "${FW:=/usr/share/edk2-ovmf}"
+gui=
+if [ "$1" = -g ]; then gui=1; shift; fi
+mode=${1:-iso}
+
+mkdir -p "$dir"
+# a disk that a running qemu has open must not be touched
+inuse() {
+	for p in $(pgrep qemu-system); do
+		for f in /proc/$p/fd/*; do [ "$(readlink "$f" 2>/dev/null)" = "$DISK" ] && return 0; done
+	done
+	return 1
+}
+if inuse; then die "a vm is already running on $DISK, leave it with ctrl-a x first"; fi
+[ -f "$FW/OVMF_CODE.fd" ] && [ -f "$FW/OVMF_VARS.fd" ] || die "no OVMF in $FW (set FW)"
+case $mode in
+reset) rm -f "$DISK" "$dir/vars.fd"; echo "disk removed"; exit 0;;
+iso|disk|install) ;;
+*) echo "usage: chamesle-vm [-g] iso|disk|install|reset" >&2; exit 2;;
+esac
+[ "$mode" = install ] && rm -f "$DISK" "$dir/vars.fd"
+[ -f "$DISK" ] || { qemu-img create -f raw "$DISK" "$SIZE" >/dev/null || die "cannot make $DISK"; echo "new empty disk: $DISK ($SIZE)"; }
+[ -f "$dir/vars.fd" ] || cp "$FW/OVMF_VARS.fd" "$dir/vars.fd"
+
+set -- -m "$MEM" -smp "$CPUS" -machine q35 \
+	-drive if=pflash,format=raw,readonly=on,file="$FW/OVMF_CODE.fd" \
+	-drive if=pflash,format=raw,file="$dir/vars.fd" \
+	-drive file="$DISK",format=raw,if=virtio \
+	-nic user,model=virtio-net-pci -device virtio-rng-pci
+[ -w /dev/kvm ] && set -- "$@" -accel kvm -cpu host
+if [ "$mode" = iso ] || [ "$mode" = install ]; then
+	[ -f "$ISO" ] || die "no ISO at $ISO (set ISO)"
+	set -- "$@" -drive file="$ISO",media=cdrom,readonly=on -boot order=d
+else
+	[ -n "$(head -c 512 "$DISK" | tr -d '\000')" ] || die "the disk is empty, install onto it first (chamesle-vm iso)"
+fi
+if [ "$mode" = install ]; then
+	rm -f "$dir"/ser.*; mkfifo "$dir/ser.in" "$dir/ser.out"
+	qemu-system-x86_64 "$@" -display none -serial pipe:"$dir/ser" -monitor none &
+	qpid=$!
+	cat "$dir/ser.out" > "$dir/ser.log" &
+	exec 3> "$dir/ser.in"
+	# run CMD in the vm and wait until it has finished, stop if it failed. the sentinel is computed, so the echoed command line never matches it
+	run() {
+		echo "==> $1"
+		printf '%s; echo __R$((0+$?))_X\n' "$2" >&3
+		t=0
+		while ! grep -q '__R[0-9]*_X' "$dir/ser.log"; do
+			sleep 2; t=$((t + 2))
+			[ $t -lt "${3:-300}" ] || { kill $qpid; die "'$1' took too long, see $dir/ser.log"; }
+		done
+		grep -q '__R0_X' "$dir/ser.log" || { tail -n 8 "$dir/ser.log" >&2; kill $qpid; die "'$1' failed"; }
+		: > "$dir/ser.log"
+	}
+	echo "==> booting the ISO (a minute or two without kvm)"
+	# any key stops the boot menu's countdown, so say nothing until the kernel is up
+	n=0
+	until grep -q 'Linux version' "$dir/ser.log"; do
+		sleep 2; n=$((n + 2))
+		[ $n -lt 240 ] || { kill $qpid; die "the kernel did not start, see $dir/ser.log"; }
+	done
+	sleep 20
+	n=0
+	while ! grep -q '__U42_X' "$dir/ser.log"; do
+		printf 'echo __U$((6*7))_X\n' >&3; sleep 5; n=$((n + 5))
+		[ $n -lt 300 ] || { kill $qpid; die "the live system did not come up, see $dir/ser.log"; }
+	done
+	: > "$dir/ser.log"
+	run "partitioning" "printf 'label: gpt\nsize=512M, type=U\ntype=L\n' | sfdisk /dev/vda >/dev/null && sleep 2"
+	run "boot partition" "modprobe vfat; mkfs.fat -F32 /dev/vda1 >/dev/null"
+	run "zfs pool" "modprobe zfs && zpool create -f -o ashift=12 -O compression=zstd -O acltype=posixacl -O xattr=sa -O mountpoint=none -R /mnt rpool /dev/vda2 && zfs create -o mountpoint=/ -o canmount=noauto rpool/root && zfs create -o mountpoint=/home rpool/home && zfs create -o mountpoint=/var rpool/var && zpool set bootfs=rpool/root rpool && zfs mount rpool/root && zfs mount -a && mkdir -p /mnt/boot && mount -t vfat /dev/vda1 /mnt/boot"
+	run "copying the system" "tar -C /run/live/rootfs -cf - . | tar -C /mnt -xpf - && cp /run/live/medium/boot/initrd /mnt/boot/initrd && cp /mnt/boot/vmlinuz-* /mnt/boot/vmlinuz" 900
+	run "fstab, password, boot entry" "printf 'UUID=%s /boot vfat rw,noatime 0 2\n' \$(blkid -s UUID -o value /dev/vda1) >> /mnt/etc/fstab && sed -i 's/^root:x:/root:/' /mnt/etc/passwd && mkdir -p /mnt/boot/EFI/BOOT && cp /mnt/usr/share/limine/BOOTX64.EFI /mnt/boot/EFI/BOOT/ && printf 'timeout: 3\nserial: yes\n\n/Chamesle\n    protocol: linux\n    path: boot():/vmlinuz\n    module_path: boot():/initrd\n    cmdline: root=ZFS=rpool/root rw console=tty0 console=ttyS0,115200\n' > /mnt/boot/limine.conf"
+	run "unmounting" "umount -R /mnt && zpool export rpool"
+	echo "==> shutting down"
+	printf 'poweroff\n' >&3
+	wait $qpid
+	rm -f "$dir"/ser.in "$dir"/ser.out
+	echo "installed. start it with: chamesle-vm disk   (root has no password)"
+	exit 0
+fi
+if [ -n "$gui" ]; then
+	exec qemu-system-x86_64 "$@"
+fi
+exec qemu-system-x86_64 "$@" -nographic

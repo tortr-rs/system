@@ -48,8 +48,12 @@ fi
 [ -n "$MAG" ] || MAG=$(command -v mag) || die "no mag: put it in PATH or set MAG"
 MAG_ROOT=$rootfs MAG_PREFIX=/usr "$MAG" relocate ${from:+"$from"}
 
-rm -rf "$rootfs"/var/cache/mag "$rootfs"/var/tmp/mag "$rootfs"/usr/include "$rootfs"/usr/lib/pkgconfig "$rootfs"/lib/firmware
-find "$rootfs"/usr/lib -name "*.a" -o -name "*.la" | xargs rm -f
+rm -rf "$rootfs"/var/cache/mag "$rootfs"/var/tmp/mag "$rootfs"/lib/firmware
+# KEEPDEV=1 keeps the headers and static libraries, so the compiler in the image can build things
+if [ -z "$KEEPDEV" ]; then
+	rm -rf "$rootfs"/usr/include "$rootfs"/usr/lib/pkgconfig
+	find "$rootfs"/usr/lib -name "*.a" -o -name "*.la" | xargs rm -f
+fi
 tar -C "$profile/overlay" -cf - . | tar -C "$rootfs" -xf -
 for t in chamesle-bootstrap chamesle-chroot chamesle-disk; do
 	install -Dm755 "$here/../tools/$t" "$rootfs/usr/bin/$t"
@@ -69,7 +73,7 @@ depmod -b "$rootfs" "$kver"
 "$here/mkinitramfs" -m "$profile/modules" "$rootfs" "$kver" "$iso/boot/initrd"
 
 rm -f "$iso/LiveOS/rootfs.sfs"
-mksquashfs "$rootfs" "$iso/LiveOS/rootfs.sfs" -comp zstd -Xcompression-level 19 -b 256K -noappend -no-progress >/dev/null
+mksquashfs "$rootfs" "$iso/LiveOS/rootfs.sfs" -all-root -comp zstd -Xcompression-level 19 -b 256K -noappend -no-progress >/dev/null
 
 cp "$LIMINE"/limine-bios.sys "$LIMINE"/limine-bios-cd.bin "$LIMINE"/limine-uefi-cd.bin "$iso/boot/limine/"
 cp "$LIMINE"/BOOTX64.EFI "$iso/EFI/BOOT/"

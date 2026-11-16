@@ -71,7 +71,7 @@ export PAGER=less
 umask 022
 P
 [ -e etc/os-release ] || printf 'NAME=Chamesle\nID=chamesle\nPRETTY_NAME="Chamesle"\n' > etc/os-release
-[ -e etc/mag.conf ] || printf '# read by mag, same syntax as pkgsrc mk.conf\nJOBS=%s\nCFLAGS=-O2 -std=gnu17 -include sys/sysmacros.h\nPKG_OPTIONS.tnftp=ssl\nCONFIGURE_ARGS.libtirpc=--disable-gssapi\nPKG_SYSCONFDIR.libressl=/etc/ssl\nMAKE.libunistring=gmake\nMAKE.sudo=gmake\nCONFIGURE_ARGS.gmp=--disable-assembly --disable-cxx\nPKG_OPTIONS.opendoas=persist\nCONFIGURE_ARGS.doas=--without-pam\n' "$(nproc 2>/dev/null || echo 4)" > etc/mag.conf
+[ -e etc/mag.conf ] || printf '# read by mag, same syntax as pkgsrc mk.conf\nJOBS=%s\nCFLAGS=-O2 -std=gnu17 -include sys/sysmacros.h\nPKG_OPTIONS.tnftp=ssl\nCONFIGURE_ARGS.libtirpc=--disable-gssapi\nPKG_SYSCONFDIR.libressl=/etc/ssl\nMAKE.libunistring=gmake\nMAKE.sudo=gmake\nCONFIGURE_ARGS.gmp=--disable-assembly --disable-cxx --disable-fat\nPKG_OPTIONS.opendoas=persist\nCONFIGURE_ARGS.doas=--without-pam\n' "$(nproc 2>/dev/null || echo 4)" > etc/mag.conf
 export MAG_ROOT=$PWD MAG_PREFIX=/usr MAG_REPO
 echo "installing: $base"
 mag install $base
