@@ -16,7 +16,7 @@
 
 ### 1.1 What it is
 
-Chamesle is a Linux distribution you build from source and put on a disk yourself. There is no installer: you
+Chamesle is a Linux distribution built from source that you put on a disk yourself, starting from the ISO. There is no installer: you
 install the root file system, write the configuration and the boot entry by hand. `chamesle-disk` partitions and formats the
 disk for you if you want, and this handbook goes through every other step.
 
@@ -855,77 +855,14 @@ mksh, vim, mag with Chamesle's recipes (`mag search` and `mag info` work before 
 `chamesle-chroot`, `chamesle-disk`, the disk tools (`cfdisk`, `sfdisk`, `mkfs.ext4`, `mkfs.fat`, `zpool`, `zfs`) and this handbook in
 `/usr/share/doc/chamesle/handbook.md`. It is where you do chapter 3 on a machine that has nothing on it.
 
-### 8.2 Building
-
-The machine that builds needs `mksquashfs` (filesystems/squashfs), `xorriso` (sysutils/libisoburn), `zstd`, `bsdcpio`,
-`limine` and `mag`, plus what chamesle-bootstrap needs.
-
-    $HOME/src/system/iso/mkiso -r $HOME/src/mag/repo:/usr/pkgsrc
-
-The usage:
-
-    chamesle-chroot DIR [COMMAND...]
-    chamesle-disk DISK
-    mkiso [-p profile] [-r repos] [-R rootfs] [-w workdir] [-o out.iso]
-
-* `-p` is the profile directory (default `iso/profile`)
-* `-r` is `MAG_REPO`
-* `-R` uses a root you have already built, copied and not changed, instead of building one
-* `-w` is the work directory (default `./work`)
-* `-o` is the file to write (default `chamesle.iso`)
-
-Environment: `LIMINE` is where limine's files are (default `/usr/share/limine`), `MKISOFS` is the command that makes the
-ISO (default `xorriso -as mkisofs`), `MAG` is the mag to put into the image, `MAGREPO` the repo whose recipes it carries
-in `/usr/share/mag/repo` (default: the `repo` next to a mag checkout, else the first `MAG_REPO` entry with a `PROVIDES` file).
-
-In order:
-
-1. `chamesle-bootstrap` builds a root from `profile/packages`, with the host name `chamesle-live`.
-2. `profile/overlay` is copied over it.
-3. `chamesle-bootstrap`, `chamesle-chroot`, `chamesle-disk`, the handbook, `mag` and its recipes are put into it.
-4. The kernel from `boot/vmlinuz-*` is copied to the ISO, and `depmod` runs on the root.
-5. `mkinitramfs` makes `boot/initrd` from `profile/modules`.
-6. The root is written as a zstd squashfs, `LiveOS/rootfs.sfs`.
-7. limine's boot files are copied and `profile/limine.conf` becomes `boot/limine/limine.conf`.
-8. `xorriso` writes the ISO with the BIOS and UEFI boot images and `limine bios-install` makes it bootable on BIOS.
-
-A root built that way still has its build-time loader paths (section 4.4). To relocate it, and to put rifle in it, build
-the root yourself and hand it over:
-
-    MAG_REPO=$HOME/src/mag/repo:/usr/pkgsrc $HOME/src/system/tools/chamesle-bootstrap \
-        -s "$(grep -v '^#' $HOME/src/system/iso/profile/packages | tr '\n' ' ')" -n chamesle-live /srv/rootfs
-    MAG_ROOT=/srv/rootfs mag relocate
-    install -m755 $HOME/src/rifle/rifle /srv/rootfs/usr/bin/rifle
-    $HOME/src/rifle/rifle --install /srv/rootfs/usr/bin
-    $HOME/src/system/iso/mkiso -R /srv/rootfs -o chamesle.iso
-
-### 8.3 The profile
-
-    iso/profile/packages        packages of the live root, one per line, # for comments
-    iso/profile/modules         modules the initramfs loads to find the medium
-    iso/profile/limine.conf     boot menu
-    iso/profile/overlay/        files copied over the root: etc/motd
-
-`packages` is the base set of chapter 3. `modules` lists `squashfs overlay loop isofs sr_mod cdrom sd_mod usb_storage uas
-xhci_pci ehci_pci ahci ata_piix ata_generic pata_acpi virtio_blk nvme virtio_pci virtio_scsi ext4 vfat nls_cp437
-nls_iso8859_1`, one per line, then a `[zfs]` line and `zfs`, which only a root on ZFS loads. The boot entry:
-
-    timeout: 3
-
-    /Chamesle live
-        protocol: linux
-        path: boot():/boot/vmlinuz
-        module_path: boot():/boot/initrd
-        cmdline: quiet
-
-### 8.4 How it boots
+### 8.2 How it boots
 
 `iso/init` looks through `/dev/sr*`, `/dev/sd*`, `/dev/nvme*n*p*`, `/dev/vd*` and `/dev/mmcblk*` until it finds one that
 mounts and has `LiveOS/rootfs.sfs`. It mounts that squashfs read-only, puts a tmpfs overlay over it, moves the medium and
 the squashfs to `/run/live/medium` and `/run/live/rootfs`, and runs `switch_root` into the result. Whatever you change
 in the live system is gone at shutdown.
 
-### 8.5 Trying it in qemu
+### 8.3 Trying it in qemu
 
 BIOS:
 
@@ -1053,7 +990,6 @@ into a staging directory and prints where the files are.
 | `system/tools/chamesle-chroot` | chroot with the pseudo file systems mounted |
 | `system/tools/chamesle-disk` | cfdisk, vfat boot partition, ZFS root, mounted on `/mnt` |
 | `system/files/` | init, rc, `service`, `init.conf` and the service scripts that go into every root |
-| `system/iso/mkiso` | builds the live ISO |
 | `system/iso/mkinitramfs` | builds an initramfs |
 | `system/iso/init` | the first process in the initramfs |
 | `system/iso/profile/packages` | what is in the live root |
@@ -1078,7 +1014,6 @@ into a staging directory and prints where the files are.
 ### 10.3 Commands in short
 
     chamesle-bootstrap [-r REPOS] [-s PACKAGES] [-n HOSTNAME] TARGET
-    mkiso [-p profile] [-r repos] [-R rootfs] [-w workdir] [-o out.iso]
     mkinitramfs [-m modules] ROOTFS KVER OUT
     mag [-nfk] install|remove|upgrade|autoremove|list|info|search|files|owns|deps|rdeps|fetch|build|sync|relocate|hash
     rifle --install DIR | --list
