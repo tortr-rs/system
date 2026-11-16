@@ -3,7 +3,7 @@
 1. About Chamesle
 2. Preparing
 3. Installing by hand
-4. Using hoard
+4. Using SPAS
 5. rifle
 6. The base system
 7. The kernel and firmware
@@ -27,7 +27,7 @@ The parts:
 | kernel | a prebuilt Linux 6.18 LTS kernel with its modules |
 | musl   | the C library |
 | rifle  | the coreutils, all in one C file; `cat`, `ls`, `cp` and the rest are links to one program |
-| hoard  | the package manager, from SPAS; it builds from source and runs Gentoo's ebuilds |
+| SPAS   | the package manager; its command is `hoard`. It builds from source and runs Gentoo's ebuilds |
 | mksh   | the shell, login shell and `/bin/sh` |
 | init   | Winchester, `/sbin/init`, a shell script that runs under mksh, in the style of FreeBSD's: `/etc/rc`, `/etc/init.conf`, services |
 | limine | the boot loader, BIOS and UEFI |
@@ -83,13 +83,13 @@ Chamesle is built from a running Linux machine: any distribution, or the live IS
 Plan for about 20 GB of free disk space for the sources and build directories of a first install, and a network
 connection.
 
-### 2.2 Building hoard and rifle
+### 2.2 Building SPAS and rifle
 
 rifle is a single C file with no libc under it:
 
     cd $HOME/src/rifle && ./build.sh
 
-`rifle/build.sh` leaves `./rifle` and a `bin/` directory with a link for every tool. hoard is a Rust program. For a
+`rifle/build.sh` leaves `./rifle` and a `bin/` directory with a link for every tool. SPAS is a Rust program, and builds the `hoard` command. For a
 system on musl it is built for the musl target, as a static binary:
 
     cd $HOME/src/SimplePackagemAnagingSystem
@@ -215,7 +215,7 @@ Then go on with 3.6 (fstab) and the rest. rifle (3.5) is on the ISO already, ski
 
 ### 3.4 Building the system from source, instead
 
-Have hoard and the tree ready (sections 2.2 to 2.4) and run chamesle-bootstrap:
+Have SPAS and the tree ready (sections 2.2 to 2.4) and run chamesle-bootstrap:
 
     $HOME/src/system/tools/chamesle-bootstrap -n yourhostname /mnt
 
@@ -355,9 +355,9 @@ Then:
 3. `hoard list` shows what the bootstrap put on the machine.
 
 
-## 4. Using hoard
+## 4. Using SPAS
 
-hoard is the package manager of SPAS. It is a replacement for Portage written in Rust, and it runs Gentoo's ebuilds. Chamesle
+SPAS is the package manager, and its command is `hoard`. It is a replacement for Portage written in Rust, and it runs Gentoo's ebuilds. Chamesle
 uses Gentoo's repository on the musl profile, so a package is an ebuild in `/var/db/repos/gentoo`, and everything is built
 on the machine that installs it, unless a binary package matches.
 
@@ -534,7 +534,7 @@ are compared. The machine that runs the tests therefore has GNU coreutils for th
 not. `./build.sh` has to have run first. A case that starts with `@ro` runs with the whole file system read-only under
 `bwrap`, and is skipped when `bwrap` is missing.
 
-hoard has tests of its own, in the SPAS sources (`cargo test`).
+SPAS has tests of its own, in its sources (`cargo test`).
 
 
 ## 6. The base system
