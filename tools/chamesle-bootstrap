@@ -66,7 +66,7 @@ P
 [ -e etc/fstab ] || printf '# device  mount  type  options  dump pass\nproc /proc proc defaults 0 0\nsysfs /sys sysfs defaults 0 0\ntmpfs /tmp tmpfs mode=1777 0 0\n' > etc/fstab
 [ -e etc/profile ] || cat > etc/profile <<'P'
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-export EDITOR=vim
+export EDITOR="sam -d"
 export PAGER=less
 umask 022
 P

@@ -636,7 +636,7 @@ once (`now`) or after `+minutes`, with an optional message sent through `wall`:
 | `shells` | `/bin/sh`, `/usr/bin/mksh`, `/usr/bin/ksh` |
 | `init.conf` | host name, boot services, modules, ttys (6.2) |
 | `fstab` | `proc`, `sysfs`, `tmpfs` on `/tmp`, plus the lines you add |
-| `profile` | `PATH`, `EDITOR=vim`, `PAGER=less`, `umask 022` |
+| `profile` | `PATH`, `EDITOR="sam -d"`, `PAGER=less`, `umask 022` |
 | `os-release` | `NAME=Chamesle`, `ID=chamesle` |
 | `make.conf` | `MAKEOPTS` and `CFLAGS` for hoard |
 | `skel/` | empty directory for the files new homes start from |
