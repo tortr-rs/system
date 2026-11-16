@@ -5,7 +5,7 @@ import html, os, re, sys, time
 
 out = sys.argv[1]
 src = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'handbook.md')
-slugs = ['about', 'preparing', 'installing', 'mag', 'rifle', 'base', 'kernel', 'iso', 'maintaining', 'files']
+slugs = ['about', 'preparing', 'installing', 'hoard', 'rifle', 'base', 'kernel', 'iso', 'maintaining', 'files']
 
 NAV = ('<a href="./">Home</a> |\n<a href="download.html">Download</a> |\n<b>Handbook</b> |\n'
        '<a href="packages.html">Packages</a> |\n<a href="new.html">News</a> |\n<a href="board.html">Board</a> |\n'
@@ -147,7 +147,7 @@ for k, (title, body) in enumerate(chapters):
         toc.append('<ul>' + ''.join(f'<li><a href="{fname(k)}#{ident(s)}">{html.escape(s)}</a></li>' for s in subs) + '</ul>')
     toc.append('</li>')
 toc.append('</ol>')
-open(os.path.join(out, 'docs.html'), 'w').write(page('Handbook', 'The Chamesle handbook, chapter by chapter: preparing, installing by hand, mag, rifle, the base system, the kernel, the live ISO and the files of the system.', 'docs.html', '\n'.join(toc)))
+open(os.path.join(out, 'docs.html'), 'w').write(page('Handbook', 'The Chamesle handbook, chapter by chapter: preparing, installing by hand, hoard, rifle, the base system, the kernel, the live ISO and the files of the system.', 'docs.html', '\n'.join(toc)))
 
 for k, (title, body) in enumerate(chapters):
     name = re.sub(r'^\d+\. ', '', title)
