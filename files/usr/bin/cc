@@ -1,0 +1,2 @@
+#!/bin/sh
+exec clang --rtlib=compiler-rt --unwindlib=libunwind -fuse-ld=lld -Wno-unused-command-line-argument "$@"
