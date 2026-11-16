@@ -10,7 +10,7 @@ slugs = ['about', 'preparing', 'installing', 'spas', 'rifle', 'base', 'kernel', 
 NAV = ('<a href="./">Home</a> |\n<a href="download.html">Download</a> |\n<b>Handbook</b> |\n'
        '<a href="packages.html">Packages</a> |\n<a href="new.html">News</a> |\n<a href="board.html">Board</a> |\n'
        '<a href="chat.html">Chat</a> |\n<a href="source.html">Source</a> |\n'
-       '<a href="https://x22.chamesle.org/">X22</a> |\n<a href="about.html">About</a>')
+       '<a href="https://x22.chamesle.org/">X22</a> |\n<a href="https://spas.chamesle.org/">SPAS</a> |\n<a href="about.html">About</a>')
 
 def page(title, desc, url, body):
     t = html.escape(title)
