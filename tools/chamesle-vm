@@ -86,9 +86,9 @@ if [ "$mode" = install ]; then
 	: > "$dir/ser.log"
 	run "partitioning" "printf 'label: gpt\nsize=512M, type=U\ntype=L\n' | sfdisk /dev/vda >/dev/null && sleep 2"
 	run "boot partition" "modprobe vfat; mkfs.fat -F32 /dev/vda1 >/dev/null"
-	run "zfs pool" "modprobe zfs && zpool create -f -o ashift=12 -O compression=zstd -O acltype=posixacl -O xattr=sa -O mountpoint=none -R /mnt rpool /dev/vda2 && zfs create -o mountpoint=/ -o canmount=noauto rpool/root && zfs create -o mountpoint=/home rpool/home && zfs create -o mountpoint=/var rpool/var && zpool set bootfs=rpool/root rpool && zfs mount rpool/root && zfs mount -a && mkdir -p /mnt/boot && mount -t vfat /dev/vda1 /mnt/boot"
+	run "zfs pool" "modprobe zfs && zpool create -f -o ashift=12 -O compression=zstd -O acltype=posixacl -O xattr=sa -O mountpoint=none -R /mnt rpool /dev/vda2 && zfs create -o mountpoint=/ -o canmount=noauto rpool/root && zfs mount rpool/root && zfs create -o mountpoint=/home rpool/home && zfs create -o mountpoint=/var rpool/var && zpool set bootfs=rpool/root rpool && mkdir -p /mnt/boot && mount -t vfat /dev/vda1 /mnt/boot"
 	if [ -n "$STAGE" ]; then
-		run "unpacking the stage" "curl -s $STAGE | xz -dc | tar -C /mnt --exclude ./etc/fstab -xpf - && mkdir -p /mnt/proc /mnt/sys /mnt/dev /mnt/run /mnt/tmp /mnt/var/tmp /mnt/var/log /mnt/var/cache /mnt/home && chmod 1777 /mnt/tmp /mnt/var/tmp && cp /run/live/rootfs/etc/fstab /mnt/etc/fstab && cp /run/live/medium/boot/initrd /mnt/boot/initrd && cp /run/live/rootfs/boot/vmlinuz-* /mnt/boot/ && cp /mnt/boot/vmlinuz-* /mnt/boot/vmlinuz" 1800
+		run "unpacking the stage" "curl -sf -o /mnt/stage.tar.xz $STAGE && xz -t /mnt/stage.tar.xz && xz -dc /mnt/stage.tar.xz | tar -C /mnt --exclude ./etc/fstab -xpf - && rm /mnt/stage.tar.xz && mkdir -p /mnt/proc /mnt/sys /mnt/dev /mnt/run /mnt/tmp /mnt/var/tmp /mnt/var/log /mnt/var/cache /mnt/home && chmod 1777 /mnt/tmp /mnt/var/tmp && cp /run/live/rootfs/etc/fstab /mnt/etc/fstab && cp /run/live/medium/boot/initrd /mnt/boot/initrd && cp /run/live/rootfs/boot/vmlinuz-* /mnt/boot/ && cp /mnt/boot/vmlinuz-* /mnt/boot/vmlinuz" 1800
 	else
 		run "copying the system" "tar -C /run/live/rootfs -cf - . | tar -C /mnt -xpf - && cp /run/live/medium/boot/initrd /mnt/boot/initrd && cp /mnt/boot/vmlinuz-* /mnt/boot/vmlinuz" 900
 	fi

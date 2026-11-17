@@ -155,6 +155,7 @@ the root. Then it does, in this order:
     mkfs.fat -F32 BOOT
     zpool create -f -o ashift=12 -O compression=zstd -O acltype=posixacl -O xattr=sa -O mountpoint=none -R /mnt rpool ROOT
     zfs create -o mountpoint=/ -o canmount=noauto rpool/root
+    zfs mount rpool/root
     zfs create -o mountpoint=/home rpool/home
     zfs create -o mountpoint=/var rpool/var
     zpool set bootfs=rpool/root rpool

@@ -41,11 +41,10 @@ mkfs.fat -F32 "$boot" || die "mkfs.fat failed"
 undo() { umount /mnt/boot 2>/dev/null; zpool export -f rpool 2>/dev/null; die "$1, rpool was exported again, run chamesle-disk again"; }
 zpool create -f -o ashift=12 -O compression=zstd -O acltype=posixacl -O xattr=sa -O mountpoint=none -R /mnt rpool "$root" || die "zpool create failed"
 zfs create -o mountpoint=/ -o canmount=noauto rpool/root || undo "zfs create failed"
+zfs mount rpool/root || undo "cannot mount rpool/root"
 zfs create -o mountpoint=/home rpool/home
 zfs create -o mountpoint=/var rpool/var
 zpool set bootfs=rpool/root rpool
-zfs mount rpool/root || undo "cannot mount rpool/root"
-zfs mount -a
 mkdir -p /mnt/boot /mnt/etc
 mount -t vfat "$boot" /mnt/boot || undo "cannot mount $boot"
 
