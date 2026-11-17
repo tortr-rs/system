@@ -2,8 +2,9 @@
 export PLAN9=/opt/plan9
 export PATH=$PATH:$PLAN9/bin
 export EDITOR="sam -d"
+export SHELL=/bin/sh
 xsetroot -solid '#ddddaa' 2>/dev/null
 sxhkd -c /etc/sxhkd/sxhkdrc &
 plumber &
-9term -W 800x500+40+40 &
+9term -W 40,40,840,540 &
 exec 9wm -term 9term
