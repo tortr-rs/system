@@ -195,8 +195,13 @@ python, perl, gettext, `hoard` and its records of what is installed (`/var/db/pk
 until you ask hoard for something. Check the tarball against its `.sha256` and unpack it:
 
     sha256sum -c chamesle-stage.tar.xz.sha256
-    tar -C /mnt --exclude ./etc/fstab -xpf chamesle-stage.tar.xz
+        tar -C /mnt --exclude ./etc/fstab -xpf chamesle-stage.tar.xz
 [ -e /mnt/etc/fstab ] || tar -C /mnt -xpf chamesle-stage.tar.xz ./etc/fstab
+
+Make the directories the stage leaves out:
+
+    mkdir -p /mnt/proc /mnt/sys /mnt/dev /mnt/run /mnt/tmp /mnt/var/tmp /mnt/var/log /mnt/var/cache /mnt/home
+    chmod 1777 /mnt/tmp /mnt/var/tmp
 
 Keep `-p`: the modes and the owners matter. `/boot`, `/home`, `/proc`, `/sys`, `/dev`, `/run`, `/tmp`, `/var/cache`, `/var/log` and the
 Gentoo tree are not in the stage: the first are yours, the tree comes from `hoard sync` (section 2.3). The fstab chamesle-disk

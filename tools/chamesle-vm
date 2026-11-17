@@ -7,6 +7,7 @@
 #   chamesle-vm -g iso           same, but with a window
 # the console is this terminal: ctrl-a x leaves qemu, ctrl-a c switches to the qemu monitor.
 # the disk is UEFI, so /boot is the EFI partition and limine goes to EFI/BOOT/BOOTX64.EFI.
+#   STAGE=url chamesle-vm install   unpack a stage tarball from url instead of copying the live system
 #   ISO=path DISK=path SIZE=16G MEM=2048 CPUS=2 chamesle-vm iso
 die() { echo "chamesle-vm: $*" >&2; exit 1; }
 dir=${VMDIR:-$HOME/chamesle-build/vm}
@@ -86,7 +87,11 @@ if [ "$mode" = install ]; then
 	run "partitioning" "printf 'label: gpt\nsize=512M, type=U\ntype=L\n' | sfdisk /dev/vda >/dev/null && sleep 2"
 	run "boot partition" "modprobe vfat; mkfs.fat -F32 /dev/vda1 >/dev/null"
 	run "zfs pool" "modprobe zfs && zpool create -f -o ashift=12 -O compression=zstd -O acltype=posixacl -O xattr=sa -O mountpoint=none -R /mnt rpool /dev/vda2 && zfs create -o mountpoint=/ -o canmount=noauto rpool/root && zfs create -o mountpoint=/home rpool/home && zfs create -o mountpoint=/var rpool/var && zpool set bootfs=rpool/root rpool && zfs mount rpool/root && zfs mount -a && mkdir -p /mnt/boot && mount -t vfat /dev/vda1 /mnt/boot"
-	run "copying the system" "tar -C /run/live/rootfs -cf - . | tar -C /mnt -xpf - && cp /run/live/medium/boot/initrd /mnt/boot/initrd && cp /mnt/boot/vmlinuz-* /mnt/boot/vmlinuz" 900
+	if [ -n "$STAGE" ]; then
+		run "unpacking the stage" "curl -s $STAGE | xz -dc | tar -C /mnt --exclude ./etc/fstab -xpf - && mkdir -p /mnt/proc /mnt/sys /mnt/dev /mnt/run /mnt/tmp /mnt/var/tmp /mnt/var/log /mnt/var/cache /mnt/home && chmod 1777 /mnt/tmp /mnt/var/tmp && cp /run/live/rootfs/etc/fstab /mnt/etc/fstab && cp /run/live/medium/boot/initrd /mnt/boot/initrd && cp /run/live/rootfs/boot/vmlinuz-* /mnt/boot/ && cp /mnt/boot/vmlinuz-* /mnt/boot/vmlinuz" 1800
+	else
+		run "copying the system" "tar -C /run/live/rootfs -cf - . | tar -C /mnt -xpf - && cp /run/live/medium/boot/initrd /mnt/boot/initrd && cp /mnt/boot/vmlinuz-* /mnt/boot/vmlinuz" 900
+	fi
 	run "fstab, password, boot entry" "printf 'UUID=%s /boot vfat rw,noatime 0 2\n' \$(blkid -s UUID -o value /dev/vda1) >> /mnt/etc/fstab && sed -i 's/^root:x:/root:/' /mnt/etc/passwd && mkdir -p /mnt/boot/EFI/BOOT && cp /mnt/usr/share/limine/BOOTX64.EFI /mnt/boot/EFI/BOOT/ && printf 'timeout: 3\nserial: yes\n\n/Chamesle\n    protocol: linux\n    path: boot():/vmlinuz\n    module_path: boot():/initrd\n    cmdline: root=ZFS=rpool/root rw console=tty0 console=ttyS0,115200\n' > /mnt/boot/limine.conf"
 	run "unmounting" "umount -R /mnt && zpool export rpool"
 	echo "==> shutting down"
