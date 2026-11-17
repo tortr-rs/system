@@ -193,11 +193,11 @@ UEFI. The root can be ZFS by hand as well: the `zpool` and `zfs` lines of 3.1 ar
 
 The system comes as a stage tarball, as on Gentoo: a root with the base already in it. rifle, mksh, Winchester, musl, gcc,
 python, perl, gettext, `hoard` and its records of what is installed (`/var/db/pkg`) are all inside. Nothing is compiled
-until you ask hoard for something. Check the tarball against its `.sha256` and unpack it:
+until you ask hoard for something. It is on the releases page of github.com/tortr-rs/chamesle, with its `.sha256`. Check the tarball against its `.sha256` and unpack it:
 
-    sha256sum -c chamesle-stage.tar.xz.sha256
-        tar -C /mnt --exclude ./etc/fstab -xpf chamesle-stage.tar.xz
-[ -e /mnt/etc/fstab ] || tar -C /mnt -xpf chamesle-stage.tar.xz ./etc/fstab
+    sha256sum -c chamesle-stage-20261117.tar.xz.sha256
+        tar -C /mnt --exclude ./etc/fstab -xpf chamesle-stage-20261117.tar.xz
+[ -e /mnt/etc/fstab ] || tar -C /mnt -xpf chamesle-stage-20261117.tar.xz ./etc/fstab
 
 Make the directories the stage leaves out:
 
@@ -241,7 +241,7 @@ hoard, and pack the root:
 
     tar -C ROOT -cpf - --exclude=./proc --exclude=./sys --exclude=./dev --exclude=./run --exclude=./tmp \
         --exclude=./boot --exclude=./home --exclude=./var/tmp --exclude=./var/cache --exclude=./var/log \
-        --exclude=./var/db/repos . | xz -T0 > chamesle-stage.tar.xz
+        --exclude=./var/db/repos . | xz -T0 > chamesle-stage-20261117.tar.xz
 
 GNU patch is the one thing the stage3 does not give, and it is built from source.
 
