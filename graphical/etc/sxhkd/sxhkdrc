@@ -1,0 +1,23 @@
+# the dwm keys, as far as a window manager without tags can have them
+super + t
+	9term
+super + shift + Return
+	9term
+super + d
+	dmenu_run -i -p run:
+super + a
+	acme
+super + e
+	9term -c sam
+super + shift + q
+	pkill -x 9wm
+XF86AudioRaiseVolume
+	amixer -q set Master 5%+
+XF86AudioLowerVolume
+	amixer -q set Master 5%-
+XF86AudioMute
+	amixer -q set Master toggle
+XF86MonBrightnessUp
+	brightnessctl -q set 5%+
+XF86MonBrightnessDown
+	brightnessctl -q -n 1% set 5%-

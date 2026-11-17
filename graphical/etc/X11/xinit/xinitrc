@@ -1,0 +1,9 @@
+#!/bin/sh
+export PLAN9=/opt/plan9
+export PATH=$PATH:$PLAN9/bin
+export EDITOR="sam -d"
+xsetroot -solid '#ddddaa' 2>/dev/null
+sxhkd -c /etc/sxhkd/sxhkdrc &
+plumber &
+9term -W 800x500+40+40 &
+exec 9wm -term 9term

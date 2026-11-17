@@ -1,0 +1,8 @@
+#!/bin/sh
+# the login on tty1 of a graphical stage: starts X with rio, and comes back to the shell when X ends
+export PLAN9=/opt/plan9
+export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PLAN9/bin
+export HOME=${HOME:-/root}
+cd "$HOME"
+startx /etc/X11/xinit/xinitrc -- :0 vt1 -keeptty >"$HOME/.xsession-errors" 2>&1
+exec /usr/bin/mksh -l

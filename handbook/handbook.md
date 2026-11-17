@@ -245,6 +245,42 @@ hoard, and pack the root:
 
 GNU patch is the one thing the stage3 does not give, and it is built from source.
 
+### 3.5 The other stages
+
+There are four stages. The unpacking in 3.3 is the same for all of them; only the tarball differs.
+
+| tarball | libc | what is in it |
+|---------|------|---------------|
+| `chamesle-stage-DATE` | musl | the base of 3.3: rifle, mksh, Winchester, gcc, SPAS, sam |
+| `chamesle-stage-graphical-DATE` | musl | the base, plus X, 9wm, sxhkd, dmenu, and plan9port with 9term and acme |
+| `chamesle-stage-glibc-DATE` | glibc | Gentoo's glibc userland (GNU coreutils stay), with Winchester, mksh, SPAS, rifle and sam |
+| `chamesle-stage-glibc-graphical-DATE` | glibc | the glibc stage, plus the same graphical set |
+
+Pick the libc by what you want to run. musl is Chamesle's own; glibc is for programs that only come as binaries for glibc.
+SPAS reads the profile in `/etc/spas/make.profile`, which is the musl profile in the musl stages and the plain one in the
+glibc stages.
+
+#### The graphical stages
+
+On the first boot the login on tty1 is `chamesle-session`, not a shell. It starts X, and X starts `9wm`, which is the
+window manager that looks and works like rio: the right button makes windows (New, Reshape, Move, Delete, Hide), and
+text is selected and cut by chording the mouse buttons. A `9term` is open when it comes up, with `plumber` behind it.
+When X ends you land in `mksh`. The login is `root` with no password until you set one (3.7).
+
+`sxhkd` carries the keys of the dwm setup that make sense without tags (`/etc/sxhkd/sxhkdrc`):
+
+| key | does |
+|-----|------|
+| Super+t, Super+Shift+Return | a new `9term` |
+| Super+d | `dmenu_run` |
+| Super+a | `acme` |
+| Super+e | `sam` in a `9term` |
+| Super+Shift+q | ends the session (kills `9wm`) |
+| volume and brightness keys | `amixer` and `brightnessctl` |
+
+`EDITOR` is `sam -d` there too. Everything is a file to change: `/etc/X11/xinit/xinitrc` is the session, and
+`getty-tty1` in `/etc/init.conf` is what starts it. Take that line out to go back to a plain login.
+
 ### 3.6 fstab
 
 If you used chamesle-disk the file is written. Look at it: the boot partition by UUID on `/boot`, then `proc`, `sysfs`
