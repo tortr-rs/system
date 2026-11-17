@@ -119,8 +119,7 @@ Its own `etc/spas` is the one used.
 
 ### 2.5 make.conf
 
-`/etc/spas/make.conf` holds the build settings, and section 4.4 has what goes in it. `chamesle-bootstrap` writes a first one
-for the new system. For the host you build from, make one yourself:
+`/etc/spas/make.conf` holds the build settings, and section 4.4 has what goes in it. The stage has one. For the host you build from, make one yourself:
 
     CFLAGS="-O2 -pipe -std=gnu17"
     CXXFLAGS="${CFLAGS}"
@@ -189,18 +188,23 @@ On an NVMe disk the partitions are `/dev/nvme0n1p1` and so on. Replace `sda1`, `
 The FAT partition is `/boot`. The kernel and `limine.conf` end up there, where limine looks for them on both BIOS and
 UEFI. The root can be ZFS by hand as well: the `zpool` and `zfs` lines of 3.1 are all there is to it.
 
-### 3.3 Copying the live system
+### 3.3 Unpacking the stage
 
-The live ISO has no compiler, so on a machine booted from it the system is not built, it is copied. The read-only root of
-the ISO is mounted on `/run/live/rootfs` and the ISO itself on `/run/live/medium`:
+The system comes as a stage tarball, as on Gentoo: a root with the base already in it. rifle, mksh, Winchester, musl, gcc,
+python, perl, gettext, `hoard` and its records of what is installed (`/var/db/pkg`) are all inside. Nothing is compiled
+until you ask hoard for something. Check the tarball against its `.sha256` and unpack it:
 
-    tar -C /run/live/rootfs --exclude ./etc/fstab -cf - . | tar -C /mnt -xpf -
-    [ -e /mnt/etc/fstab ] || cp /run/live/rootfs/etc/fstab /mnt/etc/fstab
+    sha256sum -c chamesle-stage.tar.xz.sha256
+    tar -C /mnt --exclude ./etc/fstab -xpf chamesle-stage.tar.xz
+[ -e /mnt/etc/fstab ] || tar -C /mnt -xpf chamesle-stage.tar.xz ./etc/fstab
+
+Keep `-p`: the modes and the owners matter. `/boot`, `/home`, `/proc`, `/sys`, `/dev`, `/run`, `/tmp`, `/var/cache`, `/var/log` and the
+Gentoo tree are not in the stage: the first are yours, the tree comes from `hoard sync` (section 2.3). The fstab chamesle-disk
+wrote is left alone, the stage's own is only used if there is none (3.6). The kernel
+and the initrd come from the ISO:
+
     cp /run/live/medium/boot/initrd /mnt/boot/initrd
-
-That is the whole base system, kernel, modules and ZFS included, as it was when the ISO was made. The copy keeps the
-fstab chamesle-disk wrote. The firmware for wifi and some network cards is not on the ISO. Add it with hoard once the new system runs (section 4), or build everything instead (3.4), which needs a
-machine with a compiler.
+    cp /run/live/medium/boot/vmlinuz-* /mnt/boot/
 
 Work inside the new root with `chamesle-chroot`:
 
@@ -211,52 +215,29 @@ It mounts `proc`, `sys`, `dev`, `dev/pts` and a tmpfs on `run` under the directo
 `chroot` with an empty environment (`HOME=/root`, `TERM`, `PATH`) and takes the mounts away again when the command ends. Without a command it
 starts `/usr/bin/mksh -l`.
 
-Then go on with 3.6 (fstab) and the rest. rifle (3.5) is on the ISO already, skip it. The kernel is in `/mnt/boot` already.
+Inside, fetch the tree and install what you want:
 
-### 3.4 Building the system from source, instead
+    hoard sync
+    hoard install -y -j4 --keep-going app-editors/vim
 
-Have SPAS and the tree ready (sections 2.2 to 2.4) and run chamesle-bootstrap:
+The stage's `/etc/spas/make.conf` builds with gcc (`CC=gcc`, `CXX=g++`) for `x86_64-pc-linux-musl` and the musl profile. Its
+`/etc/spas/profile/package.provided` lists what the stage already has, so hoard does not build those again: `musl`,
+`baselayout`, `util-linux`, `libunistring`, `make`, `m4`, `linux-headers`, `e2fsprogs`, `gettext` and a few others. `--resume` goes
+on after a failed build. Then go on with 3.6 (fstab) and the rest.
 
-    $HOME/src/system/tools/chamesle-bootstrap -n yourhostname /mnt
+### 3.4 Building the stage
 
-Its usage:
+You do not need this to install. It is how the stage is made. Start from a Gentoo musl stage3, whose gcc, binutils, python, perl
+and gettext are binaries, check its digest, and take from it the files each package lists in `/var/db/pkg/*/*/CONTENTS`, plus the
+`/var/db/pkg` directories themselves so hoard knows they are installed. Put rifle, mksh, Winchester, the files in
+`files/` and a `hoard` built for musl on top, write `make.conf` and `package.provided`, build whatever else the base needs with
+hoard, and pack the root:
 
-    chamesle-bootstrap [-s PACKAGES] [-n HOSTNAME] TARGET
+    tar -C ROOT -cpf - --exclude=./proc --exclude=./sys --exclude=./dev --exclude=./run --exclude=./tmp \
+        --exclude=./boot --exclude=./home --exclude=./var/tmp --exclude=./var/cache --exclude=./var/log \
+        --exclude=./var/db/repos . | xz -T0 > chamesle-stage.tar.xz
 
-* `-s` is the list of packages to install instead of the base set
-* `-n` is the host name, `chamesle` if not given
-
-It makes the directories (`bin boot dev etc/skel home lib lib/firmware mnt proc root run sbin srv sys tmp usr/bin
-usr/lib usr/sbin usr/share usr/local/bin var/cache var/lib var/log var/tmp`, with `tmp` and `var/tmp` mode 1777 and
-`root` mode 700), installs everything in `files/` (init, rc, the services, `init.conf`), writes the first `/etc` files (`passwd`,
-`group`, `shells`, `fstab`, `profile`, `os-release`, and `spas/make.conf` with the musl profile), copies the tree into the new
-root, and builds the base set into the target with `hoard --root`:
-
-    sys-libs/musl app-shells/bash app-shells/mksh sys-apps/util-linux sys-apps/kmod sys-fs/eudev net-misc/dhcpcd
-    sys-fs/e2fsprogs sys-fs/dosfstools sys-boot/limine sys-kernel/gentoo-sources sys-kernel/linux-firmware
-    sys-fs/zfs sys-fs/zfs-kmod app-editors/vim llvm-core/clang llvm-core/lld llvm-runtimes/compiler-rt llvm-runtimes/libunwind
-
-`llvm-core/clang` (with LLVM under it), `lld`, `compiler-rt` and `libunwind` are the compiler of the new system: it builds
-what `hoard install` asks for after `hoard sync`, so no other machine is needed. They are the longest part of the bootstrap.
-It also installs `chamesle-chroot` and `chamesle-disk`, and runs `depmod`.
-
-The sources go in `/mnt/var/cache/distfiles` and are not fetched twice. An existing file in `/etc` is never overwritten, so
-the script can be run again after a failure. A build that fails stops and names the directory it left behind, and
-`hoard --root /mnt install --resume` goes on from where it stopped.
-
-### 3.5 rifle
-
-The base set has no coreutils: they come from rifle. Install it into the new root:
-
-    install -m755 $HOME/src/rifle/rifle /mnt/usr/bin/rifle
-    $HOME/src/rifle/rifle --install /mnt/usr/bin
-
-`rifle --install DIR` makes a link for each of its tools in `DIR`. rifle is built static, so it runs from the host as
-it is.
-
-Add the packages you want now, or after the first boot:
-
-    hoard --root /mnt install app-editors/vim
+GNU patch is the one thing the stage3 does not give, and it is built from source.
 
 ### 3.6 fstab
 
