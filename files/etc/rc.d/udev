@@ -3,7 +3,7 @@
 procname=udevd
 svc_start() {
 	udevd --daemon || return
-	udevadm trigger && udevadm settle
+	udevadm trigger && udevadm settle -t 5
 }
 svc_stop() { udevadm control --exit; }
 run "$1"
