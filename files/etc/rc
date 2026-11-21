@@ -22,6 +22,7 @@ chmod 1777 /var/tmp
 hwclock -s 2>/dev/null
 host=$(conf hostname)
 [ -n "$host" ] && echo "$host" > /proc/sys/kernel/hostname
+for f in /etc/sysctl.d/*.conf /etc/sysctl.conf; do [ -f "$f" ] && sysctl -q -p "$f"; done
 dmesg > /var/log/dmesg.boot
 for s in $(conf boot-services); do
 	service "$s" start

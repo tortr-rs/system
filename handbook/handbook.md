@@ -665,6 +665,18 @@ the network. dhcpcd gives it an address.
 On a ZFS root, `/etc/rc` runs `zfs mount -a` right after `mount -a`, which mounts `rpool/home` and `rpool/var`; the root itself was
 mounted by the initramfs.
 
+### 6.10 Kernel settings
+
+`/etc/rc` loads every `/etc/sysctl.d/*.conf` and `/etc/sysctl.conf` at boot. The base ships
+`/etc/sysctl.d/10-chamesle.conf`: kernel addresses and `dmesg` are for root only (`doas dmesg`), a process may
+`ptrace` only its own children, users get no BPF, links and files in sticky directories like `/tmp` are protected,
+setuid programs leave no core dumps, and the network takes no redirects or source routes and filters spoofed
+addresses. To change one, put it in a file of your own that sorts later, `/etc/sysctl.d/90-local.conf`:
+
+    kernel.dmesg_restrict = 0
+
+`sysctl -a` lists them all, `sysctl -w name=value` changes one until the next boot.
+
 
 ## 7. The kernel and firmware
 
@@ -921,6 +933,7 @@ X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
 | `/etc/profile` | `PATH`, `umask` |
 | `/etc/passwd`, `/etc/shadow`, `/etc/group`, `/etc/shells` | accounts, passwords, groups, login shells |
 | `/etc/fstab` | file systems |
+| `/etc/sysctl.d/` | kernel settings loaded at boot (6.10) |
 | `/etc/os-release` | `NAME=Chamesle`, `ID=chamesle` |
 | `/etc/mag/` | `repos`, `keys/`, `arch` |
 | `/etc/mkinitfs/mkinitfs.conf` | what goes into the initramfs |
