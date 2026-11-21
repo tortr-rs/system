@@ -1,8 +1,8 @@
 (
-  "Chamesle",
-  ("Terminal", SHORTCUT, "Mod4+Return", EXEC, xterm),
+  "Slate",
+  ("Terminal", SHORTCUT, "Mod4+Return", EXEC, st),
   ("Files", SHORTCUT, "Mod4+E", EXEC, xfe),
-  ("Web", SHORTCUT, "Mod4+W", EXEC, "chamesle-windowmaker web"),
+  ("Web", SHORTCUT, "Mod4+W", EXEC, "slate web"),
   ("Applications", OPEN_PLMENU, "|| wmmenugen -parser:xdg /usr/share/applications /usr/local/share/applications"),
   ("Run...", SHORTCUT, "Mod4+R", SHEXEC, "%A(Run,Type a command:)"),
   (

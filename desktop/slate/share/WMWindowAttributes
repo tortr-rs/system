@@ -1,8 +1,8 @@
 {
-  "*" = {Icon = defaultAppIcon.tiff;};
+  "*" = {Icon = defaultAppIcon.tiff; IgnoreDecorationChanges = Yes;};
   Logo.WMDock = {Icon = GNUstep3D.tiff;};
   Logo.WMPanel = {Icon = GNUstep.tiff;};
-  XTerm = {Icon = TerminalGNUstep.tiff;};
+  st-256color = {Icon = TerminalGNUstep.tiff;};
   Xfe = {NoAppIcon = No;};
   DockApp = {NoTitlebar = Yes; NoResizebar = Yes;};
 }

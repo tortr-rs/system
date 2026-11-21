@@ -14,14 +14,14 @@
         Lock = Yes;
       },
       {
-        Command = "xterm";
-        Name = xterm.XTerm;
+        Command = "st";
+        Name = st-256color.st-256color;
         AutoLaunch = No;
         Forced = No;
         BuggyApplication = No;
         Position = "0,1";
         Omnipresent = No;
-        DropCommand = "xterm %d";
+        DropCommand = "st %d";
         Lock = Yes;
       },
       {
@@ -36,14 +36,14 @@
         Lock = Yes;
       },
       {
-        Command = "chamesle-windowmaker web";
+        Command = "slate web";
         Name = Navigator.firefox;
         AutoLaunch = No;
         Forced = No;
         BuggyApplication = No;
         Position = "0,3";
         Omnipresent = No;
-        DropCommand = "chamesle-windowmaker web %d";
+        DropCommand = "slate web %d";
         Lock = Yes;
       },
       {
