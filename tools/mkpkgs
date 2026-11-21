@@ -15,7 +15,7 @@ mkdir -p "$tmp/mag/usr/bin"
 install -m755 "$MAG" "$tmp/mag/usr/bin/mag"
 mkapk -n mag -v "$("$MAG" --version | cut -d' ' -f2)" -d "the package manager" "$tmp/mag"
 
-deps="alpine-baselayout busybox busybox-binsh busybox-suid mksh agetty eudev kmod dhcpcd e2fsprogs dosfstools curl mag"
+deps="alpine-baselayout busybox busybox-binsh busybox-suid doas mksh agetty eudev kmod dhcpcd e2fsprogs dosfstools curl mag"
 if [ -n "$RIFLE" ]; then
 	mkdir -p "$tmp/rifle/usr/bin"
 	install -m755 "$RIFLE" "$tmp/rifle/usr/bin/rifle"
