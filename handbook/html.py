@@ -5,7 +5,7 @@ import html, os, re, sys, time
 
 out = sys.argv[1]
 src = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'handbook.md')
-slugs = ['about', 'preparing', 'installing', 'mag', 'rifle', 'base', 'kernel', 'iso', 'maintaining', 'files']
+slugs = ['about', 'preparing', 'installing', 'mag', 'rifle', 'base', 'kernel', 'iso', 'maintaining', 'desktop', 'files']
 
 NAV = ('<a href="./">Home</a> |\n<a href="download.html">Download</a> |\n<b>Handbook</b> |\n'
        '<a href="packages.html">Packages</a> |\n<a href="new.html">News</a> |\n<a href="board.html">Board</a> |\n'

@@ -63,7 +63,7 @@ Both are in `/etc/mag/repos`. A package is checked against the keys in `/etc/mag
 
 | directory | what is in it |
 |-----------|---------------|
-| `system/` | `tools/` (`chamesle-bootstrap`, `chamesle-chroot`, `chamesle-disk`, and `mkapk`, `mkrepo`, `mkpkgs` for the repo), `files/` (init, rc and the services), `pkg/`, `keys/`, `iso/`, this handbook |
+| `system/` | `tools/` (`chamesle-bootstrap`, `chamesle-chroot`, `chamesle-disk`, `chamesle-boot`, and `mkapk`, `mkrepo`, `mkpkgs` for the repo), `files/` (init, rc and the services), `pkg/`, `keys/`, `iso/`, this handbook |
 | `mag/`    | `mag.c`, `c.h`, `build.sh` |
 | `rifle/`  | `rifle.c`, `build.sh`, `tests/run.sh` |
 
@@ -238,6 +238,22 @@ The hash goes into `/etc/shadow`. The login shell of root is mksh.
 
 ### 3.7 The boot entry
 
+    chamesle-boot /mnt
+
+It looks at what is mounted on `/mnt` and `/mnt/boot` and
+
+* installs `limine` into the new root, so its boot files and its `limine` are the same version
+* for a root on ZFS, installs `zfs` and `zfs-lts` and adds `zfs` to the initramfs (7.5)
+* writes `/mnt/boot/limine.conf` with an entry for every kernel in `/mnt/boot`, the root by UUID, or by dataset on ZFS
+* copies `BOOTX64.EFI` to `EFI/BOOT/` on the boot partition, for UEFI
+* runs `limine bios-install` on the disk, for BIOS; on a GPT disk only when it has a BIOS boot partition, else it says
+  the disk boots by UEFI only
+
+An old `limine.conf` is kept as `limine.conf.old`. If `/boot` is not FAT, limine cannot read it; chamesle-boot then
+writes nothing and prints an entry for the GRUB of the system already on the machine (3.11).
+
+What it does by hand follows; skip to 3.8 if it said nothing went wrong.
+
     ls /mnt/boot
     System.map-6.18.64-0-lts  config-6.18.64-0-lts  initramfs-lts  vmlinuz-lts
 
@@ -250,7 +266,7 @@ the UUID of the root partition:
         protocol: linux
         path: boot():/vmlinuz-lts
         module_path: boot():/initramfs-lts
-        cmdline: root=UUID=ROOT-UUID modules=sd-mod,usb-storage,ext4 rootfstype=ext4 quiet
+        cmdline: root=UUID=ROOT-UUID modules=sd-mod,usb-storage,nvme,ext4 rootfstype=ext4 quiet
 
 `boot()` is the partition `limine.conf` is on, which is `/boot`. The initramfs finds the root, loads the modules on the
 command line and starts `/sbin/init`. Take `quiet` out to see the kernel's messages. For a serial console add
@@ -260,17 +276,18 @@ A root on ZFS names the dataset; the initramfs needs the zfs module, which is se
 
         cmdline: root=ZFS=rpool/root rootfstype=zfs quiet
 
-Install limine. `limine` is a package; install it into the new root, or use the one of the live system:
+Install limine into the new root, and use its files, not the ones of the live system; the two can differ in version, and
+limine's BIOS stage only works with a `limine-bios.sys` of its own version:
 
     chamesle-chroot /mnt mag install limine
 
 #### BIOS
 
     cp /mnt/usr/share/limine/limine-bios.sys /mnt/boot/
-    limine bios-install /dev/sda
+    chamesle-chroot /mnt limine bios-install /dev/sda
 
-`limine bios-install` writes the loader to the start of the disk and into the BIOS boot partition. `limine-bios.sys` on
-the FAT partition is the part it loads.
+`limine bios-install` writes the loader to the start of the disk and into the BIOS boot partition, which a GPT disk
+needs (3.1). `limine-bios.sys` on the FAT partition is the part it loads.
 
 #### UEFI
 
@@ -298,7 +315,7 @@ cable at boot; for wireless see section 6.8.
     mag install vim htop tmux
     mag search irc
 
-Chapter 4 has the rest.
+Chapter 4 has the rest, chapter 10 a graphical desktop.
 
 ### 3.10 32-bit machines
 
@@ -310,6 +327,45 @@ On a 32-bit PC (Pentium 4, Athlon XP and the like) boot the ISO on another machi
 The x86 repository has the same packages, built for i686 with SSE2. `-a x86` is written to `/mnt/etc/mag/arch`, and mag
 keeps to it from then on. `rifle` is only built for x86_64, so on x86 busybox gives the coreutils. limine boots 32-bit
 BIOS machines as well; the entry is the same.
+
+
+### 3.11 Next to another system
+
+To keep a Linux that is already on the disk, Chamesle goes on a partition of its own and the other system's GRUB boots
+both. The other system is not changed, except for one GRUB entry. Make a backup first; shrinking a file system that is
+in use is not possible, so it is done from the ISO.
+
+Say the disk has an EFI partition `nvme0n1p1` and the other system's ext4 root `nvme0n1p2`, 238G with 100G free.
+Shrink it to 170G and make the file system fit its partition again:
+
+    e2fsck -f /dev/nvme0n1p2
+    resize2fs /dev/nvme0n1p2 170G
+    cfdisk /dev/nvme0n1
+
+In cfdisk resize `nvme0n1p2` to 171G (a little more than the file system, never less), make `nvme0n1p3` in the free
+space, write and quit. Then
+
+    resize2fs /dev/nvme0n1p2
+    mkfs.ext4 /dev/nvme0n1p3
+    mount /dev/nvme0n1p3 /mnt
+
+Leave the EFI partition alone and do not mount anything on `/mnt/boot`: the kernel stays in `/boot` on the ext4 root,
+where GRUB reads it. Go on with 3.3 to 3.6. `chamesle-boot /mnt` then prints a GRUB entry; boot the other system, put
+the entry at the end of its `/etc/grub.d/40_custom` and run `grub-mkconfig -o /boot/grub/grub.cfg`.
+
+To use the same home in both, mount the other root in Chamesle and bind its `/home`, in `/etc/fstab`:
+
+    UUID=OTHER-ROOT-UUID /old ext4 defaults 0 2
+    /old/home /home none bind 0 0
+
+and make your user with the same name, user number and group number as there (`id` on the other system says them):
+
+    mkdir /old
+    addgroup -g 1000 alice
+    adduser -H -u 1000 -G alice alice
+
+`-H` makes no home, since the other system's is used: the files, the dotfiles and the settings of the programs are the
+same in both systems.
 
 
 ## 4. mag
@@ -682,7 +738,7 @@ The live ISO has its own initramfs, made by `iso/mkinitramfs`, which mounts the 
 The ISO is a live system to work from. It boots on BIOS and UEFI machines with limine, from a disc or a stick, logs in as
 root on every tty and has
 
-* mag, the keys and the repos, and `chamesle-bootstrap`, `chamesle-chroot`, `chamesle-disk`
+* mag, the keys and the repos, and `chamesle-bootstrap`, `chamesle-chroot`, `chamesle-disk`, `chamesle-boot`
 * the disk tools: `cfdisk`, `sfdisk`, `lsblk`, `blkid`, `mkfs.ext4`, `mkfs.fat`, `zpool`, `zfs`, `limine`
 * the network: `dhcpcd`, `iwd` with `iwctl`, `wpa_supplicant`, `curl`
 * the Intel wireless firmware, vim, less, and this handbook in `/usr/share/doc/chamesle/handbook.md`
@@ -762,9 +818,100 @@ A changed file under `/etc` is never written over. When a package brings a new o
 | no devices in `/dev` | udev did not start; check `udev` is in `boot-services` |
 
 
-## 10. File reference
+## 10. X and a window manager
 
-### 10.1 On an installed system
+### 10.1 What to install
+
+    mag install xorg-server xinit xf86-input-libinput mesa-dri-gallium font-dejavu windowmaker st
+
+| package | for |
+|---------|-----|
+| `xorg-server` | X itself, with the `modesetting` driver, which drives Intel, AMD, NVIDIA and virtual graphics through the kernel |
+| `xinit` | `startx` |
+| `xf86-input-libinput` | keyboard, mouse and touchpad |
+| `mesa-dri-gallium` | OpenGL |
+| `font-dejavu` | a font; X programs show empty boxes without one |
+| `windowmaker` | the window manager, and `WPrefs` for its settings |
+| `st` | a terminal; `xterm` is another |
+
+Any other window manager or desktop in the repos goes the same way; only the line in `~/.xinitrc` changes.
+
+### 10.2 Firmware for the graphics
+
+The kernel's graphics drivers load firmware for most cards. Install the one for yours and reboot:
+
+| graphics | firmware | Vulkan |
+|----------|----------|--------|
+| Intel, up to 14th generation | `linux-firmware-i915` | `mesa-vulkan-intel` |
+| Intel Arc, Lunar Lake and newer | `linux-firmware-xe` | `mesa-vulkan-intel` |
+| AMD | `linux-firmware-amdgpu`, `linux-firmware-radeon` for older cards | `mesa-vulkan-ati` |
+| NVIDIA | `linux-firmware-nvidia` | `mesa-vulkan-nouveau` |
+
+NVIDIA's own driver is built for glibc and is not in the repos. The open one, nouveau, runs every card; from the GTX 16
+and RTX 20 on, the card's own firmware sets the clocks and it is fast, with Vulkan from NVK in
+`mesa-vulkan-nouveau`. On older NVIDIA cards it stays slow. `lspci` says which graphics a machine has.
+
+### 10.3 Groups
+
+There is no logind to hand the screen and the input devices to whoever logs in. X opens them as the user, so the user
+needs the `video` and `input` groups (6.5):
+
+    adduser alice video
+    adduser alice input
+
+Log out and in again after.
+
+### 10.4 startx
+
+`startx` runs `~/.xinitrc`, as the user, from a text login:
+
+    echo 'exec wmaker' > ~/.xinitrc
+    startx
+
+X runs until `wmaker` ends: Exit in its menu. To start X at every login on tty1, at the end of `~/.profile`:
+
+    [ "$(tty)" = /dev/tty1 ] && exec startx
+
+Lines in `.xinitrc` before the `exec` run first, which is the place for the keyboard layout and the screen size:
+
+    setxkbmap fr
+    xrandr --output eDP-1 --mode 1920x1080
+    exec wmaker
+
+`mag install setxkbmap xrandr` for those; `xrandr` alone lists the outputs and their modes.
+
+### 10.5 Window Maker
+
+The first start makes `~/GNUstep` with Window Maker's settings. The right button on the desktop opens the menu, with
+programs, workspaces and Exit. The dock is in the top right corner and the clip, which switches workspaces, in the top
+left. Drag a program's icon to the dock to keep it there. `WPrefs` changes the rest: focus, themes, keys. The menu is
+`~/GNUstep/Defaults/WMRootMenu`.
+
+### 10.6 Firefox
+
+    mag install firefox
+
+`firefox-esr` is the long-term one. Firefox and many other programs want a D-Bus session; with `dbus` and `dbus-x11`
+installed and `dbus` in `boot-services` (6.8), start the window manager inside one:
+
+    exec dbus-launch --exit-with-session wmaker
+
+### 10.7 When it fails
+
+X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
+
+| what you see | why, and what to do |
+|--------------|---------------------|
+| `open /dev/dri/card0: Permission denied`, then `no screens found` | the user is not in `video` (10.3) |
+| `no screens found` with no permission error | no graphics driver came up; check `ls /dev/dri`, and the firmware (10.2) |
+| no keyboard or mouse in X | `xf86-input-libinput` is not installed, or the user is not in `input` |
+| X starts and ends at once | `~/.xinitrc` is missing, or names a program that is not installed |
+| boxes in place of letters | no font, `font-dejavu` |
+
+
+## 11. File reference
+
+### 11.1 On an installed system
 
 | path | what |
 |------|------|
@@ -788,12 +935,13 @@ A changed file under `/etc` is never written over. When a package brings a new o
 | `/usr/share/limine/` | limine's boot files, for installing it |
 | `/usr/share/doc/chamesle/handbook.md` | this book |
 
-### 10.2 In the sources
+### 11.2 In the sources
 
 | path | what |
 |------|------|
 | `system/tools/chamesle-bootstrap` | puts the base into a root with mag |
 | `system/tools/chamesle-chroot` | chroot with the pseudo file systems mounted |
+| `system/tools/chamesle-boot` | limine.conf and limine for the system in a directory |
 | `system/tools/chamesle-disk` | cfdisk, vfat boot partition, ZFS root, mounted on `/mnt` |
 | `system/tools/mkapk`, `mkrepo`, `mkpkgs` | packages, signed indexes, Chamesle's own repo |
 | `system/files/` | init, rc, `service`, `init.conf` and the service scripts, in `chamesle-base` |
@@ -806,11 +954,12 @@ A changed file under `/etc` is never written over. When a package brings a new o
 | `rifle/rifle.c`, `rifle/c.h`, `rifle/build.sh` | the coreutils |
 | `rifle/tests/run.sh`, `rifle/tests/cases` | the comparison tests |
 
-### 10.3 Commands in short
+### 11.3 Commands in short
 
     chamesle-bootstrap [-a ARCH] [-n HOSTNAME] [-k KERNEL] [-f FIRMWARE] TARGET [PACKAGE]...
     chamesle-chroot DIR [COMMAND...]
     chamesle-disk DISK
+    chamesle-boot [DIR]
     mag [-nf] update|install|remove|upgrade|autoremove|list|info|search|files|owns|deps|rdeps|fetch
     rifle --install DIR | --list
     limine bios-install DEVICE
