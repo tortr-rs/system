@@ -29,7 +29,7 @@ The parts:
 | mag    | the package manager, binary packages only, in one C file |
 | rifle  | the coreutils, all in one C file; `cat`, `ls`, `cp` and the rest are links to one program |
 | mksh   | the login shell; `/bin/sh` is busybox's ash |
-| init   | Winchester, `/sbin/init`, a shell script that runs under mksh, in the style of FreeBSD's: `/etc/rc`, `/etc/init.conf`, services |
+| init   | dinit, with Chamesle's services in `/etc/dinit.d` |
 | limine | the boot loader, BIOS and UEFI |
 
 Chamesle is made to be the most UNIX distribution possible, and to run on almost anything: the same base goes on a new
@@ -39,7 +39,7 @@ laptop and on a Pentium 4 with 256 MB of memory. It is a system for the tty firs
 
 mag reads two kinds of repository, both signed:
 
-* Chamesle's own, at `https://chamesle.org/repo`: `chamesle-base` (Winchester, `/etc/rc`, the services, the tools of this
+* Chamesle's own, at `https://chamesle.org/repo`: `chamesle-base` (the dinit services, the tools of this
   book and the keys), `mag` and `rifle`
 * a large musl repository with everything else: the kernel, the firmware, the libraries, editors, compilers, X, about
   28,000 packages for x86_64
@@ -197,7 +197,7 @@ Packages after the target go in too. A ThinkPad with Intel wireless and graphics
 
     chamesle-bootstrap -n t480 -f linux-firmware-intel /mnt vim
 
-What `chamesle-base` brings: Winchester and the files of chapter 6, mag, rifle, mksh, busybox for the tools rifle does not
+What `chamesle-base` brings: dinit and the files of chapter 6, mag, rifle, mksh, busybox for the tools rifle does not
 have, `agetty`, eudev, kmod, dhcpcd, e2fsprogs and curl.
 
 ### 3.4 Working inside the new root
@@ -230,7 +230,7 @@ A root on ZFS gets no root line.
 
 ### 3.6 Host name and password
 
-The host name is in `/mnt/etc/init.conf`, from `-n`. Set the root password:
+The host name is in `/mnt/etc/hostname`, from `-n`. Set the root password:
 
     chamesle-chroot /mnt passwd root
 
@@ -306,8 +306,8 @@ Do both and the disk boots either way.
 
 Leave out `zpool export` if the root is not on ZFS.
 
-Take out the installation medium. limine shows the entry for three seconds and boots the kernel. `init` runs `/etc/rc`, which mounts the
-file systems and starts the services of `init.conf`, and puts a login on the ttys. Log in as root. `dhcpcd` brings up a
+Take out the installation medium. limine shows the entry for three seconds and boots the kernel. dinit mounts the
+file systems, starts the services of `/etc/dinit.d/boot.d` and puts a login on the ttys. Log in as root. `dhcpcd` brings up a
 cable at boot; for wireless see section 6.8.
 
 ### 3.9 What to install next
@@ -549,88 +549,65 @@ not. `./build.sh` has to have run first. A case that starts with `@ro` runs with
 
 ### 6.1 init
 
-The init is called Winchester. `/sbin/init` is a mksh script, and it works the way FreeBSD's init does: the kernel starts it as process 1, it runs
-`/etc/rc`, then it keeps a getty on every tty and waits for a signal. The files are in `files/` in the sources and
-`chamesle-bootstrap` copies them into the root. Step by step:
+The init is dinit. `/sbin/init` is a short script: it mounts `proc`, `sysfs`, `devtmpfs` and `/run`, and hands over
+to `dinit`, which stays process 1. dinit starts the service called `boot` and everything it needs, keeps the
+services running, and stops them all in order when the machine goes down. The files are in `files/` in the sources and
+`chamesle-bootstrap` copies them into the root.
 
-1. `PATH` is set to `/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin`. `proc`, `sysfs` and `devtmpfs`
-   are mounted if they are not yet, and what init prints goes to `/dev/console`.
-2. If `single` is on the kernel command line, init runs `sulogin` first.
-3. `/etc/rc autoboot` runs (6.2). If it fails, init runs `sulogin` and goes on when you leave it.
-4. For every name in `ttys` of `init.conf` that has a node in `/dev`, init starts a loop that runs the getty command
-   again whenever it exits. A getty that dies within five seconds is run again after a pause of five.
-5. init waits. A signal ends the wait:
+A boot goes:
 
-| signal | what it does |
-|--------|--------------|
-| `INT`, `TERM` | reboot |
-| `USR1` | halt: stop everything and stay stopped |
-| `USR2` | power off |
+1. `rootfs`: `fsck` checks the file systems (not with `fastboot` on the kernel command line), `/` is remounted
+   read-write, `devpts`, `/dev/shm` and the cgroup2 hierarchy are mounted, `mount -a` mounts `/etc/fstab`, `zfs mount -a`
+   mounts the ZFS datasets, `swapon -a`, and `/tmp` is emptied. A failed check gives a root shell; leave it to go on.
+2. `udevd`, then `setup`: loopback up, the clock, the host name from `/etc/hostname`, `/etc/sysctl.d/*.conf`, the
+   modules (6.6), and `dmesg` into `/var/log/dmesg.boot`.
+3. `udev-trigger` replays the devices and waits for them.
+4. Every service in `/etc/dinit.d/boot.d`, all at once, each after what it depends on.
 
-6. Then it runs `/etc/rc.shutdown`, sends `TERM` to every process, `KILL` two seconds later, runs `sync`, `umount -a -r`
-   and does the last step through `/proc/sysrq-trigger` (`b` or `o`). That needs `CONFIG_MAGIC_SYSRQ` in the kernel;
-   the base set has no `reboot` program of its own that calls the kernel.
+`single` on the kernel command line starts a root shell and nothing else; the boot goes on when you leave it. If the
+boot fails, dinit starts a root shell too.
 
-### 6.2 rc, init.conf and the services
+### 6.2 Services
 
-`/etc/rc` mounts the system. In order: `/` is remounted read-write; with `autoboot`, `fsck -A -R -p` checks the
-other file systems; `devpts` and `/dev/shm` are mounted; a tmpfs goes on `/run` (not on the live ISO, where
-`/run/live` is already there); `mount -a` mounts `/etc/fstab`; `swapon -a`; `/tmp` is emptied if it is not a mount and
-set to mode 1777; the host name is set; `dmesg` is saved in `/var/log/dmesg.boot`. Then every service in
-`boot-services` is started, in the order it is written.
+A service is a file in `/etc/dinit.d` named after it. The base set has `dbus`, `dhcpcd`, `elogind`, `gdm`, `iwd`,
+`NetworkManager`, `wpa_supplicant` and the logins `tty1` to `tty6` and `ttyS0`, for when those packages are installed.
+`dinitctl` does the rest:
 
-`/etc/init.conf` is the one configuration file. One setting per line, `key = value`, `#` starts a comment, blank
-lines are ignored, spaces around `=` are free. A list is in braces and may go over several lines:
+    dinitctl list                    every service that is loaded, and its state
+    dinitctl start iwd
+    dinitctl stop iwd
+    dinitctl restart dhcpcd
+    dinitctl status dbus
+    dinitctl enable NetworkManager   start it now and at every boot
+    dinitctl disable dhcpcd          not at boot any more
 
-    hostname = chamesle
+`enable` and `disable` make and remove a link in `/etc/dinit.d/boot.d`; that directory is the list of what starts
+at boot. A fresh install has `dhcpcd` and `tty1` to `tty6` in it. `service NAME start` and the rest still work and
+run `dinitctl`.
 
-    # started in this order at boot, stopped in reverse at shutdown
-    boot-services = {udev,modules,network}
+A service whose process dies is started again, unless it dies over and over in a few seconds; then dinit gives up and
+`dinitctl list` shows it stopped. To add a service, write its file. A daemon that can stay in the foreground is a
+`process`:
 
-    modules = {}
-    ttys = {tty1,tty2,tty3,tty4,tty5,tty6,ttyS0}
-    getty = agetty --noclear $tty linux
-    getty-ttyS0 = agetty -L $tty 115200 vt100
+    # /etc/dinit.d/chronyd
+    type = process
+    command = /usr/sbin/chronyd -d
+    depends-on = system
+    smooth-recovery = true
 
-| key | meaning |
-|-----|---------|
-| `hostname` | the host name |
-| `boot-services` | the services started at boot, in order; shutdown stops them in reverse |
-| `modules` | kernel modules the `modules` service loads with `modprobe` |
-| `ttys` | the ttys that get a getty |
-| `getty` | the getty command; `$tty` is the tty name |
-| `getty-NAME` | the getty command for that tty alone |
+`depends-on = system` waits for the file systems and devices; `depends-on = dbus` for the system bus. `dinit-service(5)`
+has every setting.
 
-The parser is `conf` in `/etc/init.sh`; `conf KEY` prints the value, with a list separated by spaces. A change to
-`ttys` or `getty` takes effect at the next boot.
-
-A service is an executable file in `/etc/rc.d` (or `/usr/local/etc/rc.d`, for the ones you add) that takes
-`start`, `stop`, `restart` or `status`. The base set has `udev` (starts `udevd`, replays the devices and waits
-for them), `modules`, `network` (`dhcpcd`), and `dbus`, `iwd` and `NetworkManager` for when those packages are installed. A name in `boot-services` without a script is skipped with one line
-saying so.
-
-`service` is the way to run them:
-
-    service -l                 every service
-    service -e                 the services of boot-services, as paths
-    service network restart
-    service udev status
-
-To add a service, write the script, make it executable, and put its name in `boot-services`. With
-`/etc/rc.subr` it is short. Set `procname` to the name the process shows in `/proc/PID/comm`, write
-`svc_start`, and finish with `run "$1"`; `stop` then kills that process, `status` looks for it and `start` refuses to
-start it twice. Override `svc_stop` and `svc_status` if the defaults do not fit:
-
-    #!/bin/sh
-    . /etc/rc.subr
-    procname=chronyd
-    svc_start() { chronyd; }
-    run "$1"
+Chamesle before base r18 ran Winchester, a shell init with `/etc/init.conf` and scripts in `/etc/rc.d`. The upgrade
+to r18 moves you over by itself: the host name goes to `/etc/hostname`, the services of `boot-services` and the
+`ttys` are enabled in dinit (`network` is `dhcpcd` now, `udev` and `modules` are part of the boot), and `init.conf`
+is kept as `/etc/init.conf.old`. A changed `getty` line is not carried over; edit `/etc/dinit.d/ttyN` for that.
 
 ### 6.3 Shutting down
 
-`reboot`, `halt` and `poweroff` send `INT`, `USR1` and `USR2` to init. `shutdown -r`, `-h` or `-p` does the same, at
-once (`now`) or after `+minutes`, with an optional message sent through `wall`:
+`reboot`, `halt` and `poweroff` ask dinit to stop. It stops the services, the ones others depend on last, sends
+`TERM` and then `KILL` to what is left, turns swap off, unmounts the file systems and powers off. `shutdown -r`, `-h` or
+`-p` does the same, at once (`now`) or after `+minutes`, with an optional message sent through `wall`:
 
     shutdown -r now
     shutdown -p +10 back in ten minutes
@@ -641,7 +618,9 @@ once (`now`) or after `+minutes`, with an optional message sent through `wall`:
 |------|---------------|
 | `passwd`, `shadow`, `group` | accounts, password hashes, groups |
 | `shells` | the login shells; `/bin/mksh` is one |
-| `init.conf` | host name, boot services, modules, ttys (6.2) |
+| `hostname` | the host name |
+| `dinit.d/` | the services, and in `boot.d` the ones started at boot (6.2) |
+| `modules` | kernel modules loaded at boot, one a line |
 | `fstab` | the file systems (3.5) |
 | `profile` | `PATH`, `PAGER`, `umask 022`, and `/etc/profile.d/*.sh` |
 | `os-release` | `NAME=Chamesle`, `ID=chamesle` |
@@ -671,11 +650,11 @@ whoever runs X or a Wayland compositor needs both, or Xorg stops with `open /dev
 eudev is the udev. `udevd` gives devices their nodes in `/dev` and loads the modules the hardware needs.
 
 kmod provides `modprobe`, `insmod`, `rmmod`, `lsmod`, `modinfo` and `depmod`. A kernel's modules are in
-`/lib/modules/VERSION`. To load one by hand: `modprobe name`. To load one at every boot, put its name in `modules` of `/etc/init.conf`. To keep one from loading, put `blacklist name` in a file in `/etc/modprobe.d/`.
+`/lib/modules/VERSION`. To load one by hand: `modprobe name`. To load one at every boot, put its name on a line of `/etc/modules`. The base loads the input and network drivers of `/usr/lib/modules-load.d/chamesle.conf` too. To keep one from loading, put `blacklist name` in a file in `/etc/modprobe.d/`.
 
 ### 6.7 Networking
 
-`dhcpcd` is the DHCP client and is in the base set. It is the `network` service, in `boot-services` by default, and takes
+`dhcpcd` is the DHCP client and is in the base set. It is the `dhcpcd` service, enabled by default, and takes
 every interface, so a cable is up at boot. `ip` lists them:
 
     ip addr
@@ -687,7 +666,7 @@ A static address:
     ip route add default via 192.168.1.1
     echo 'nameserver 192.168.1.1' > /etc/resolv.conf
 
-and take `network` out of `boot-services`.
+and `dinitctl disable dhcpcd`.
 
 ### 6.8 Wireless
 
@@ -695,11 +674,11 @@ The card needs its firmware (7.4). Then iwd:
 
     mag install iwd dbus
 
-and put `dbus` and `iwd` in `boot-services` before `network`:
+and enable it, which starts dbus with it:
 
-    boot-services = {udev,modules,dbus,iwd,network}
+    dinitctl enable iwd
 
-`service dbus start`, `service iwd start` to have them now. `iwctl` connects, the same as on the ISO (2.3), and remembers
+`iwctl` connects, the same as on the ISO (2.3), and remembers
 the network. dhcpcd gives it an address.
 
 `wpa_supplicant` works too, for those who know it: `mag install wpa_supplicant`.
@@ -713,12 +692,12 @@ the network. dhcpcd gives it an address.
 `mount` and `umount` are busybox's; `lsblk`, `blkid`, `sfdisk` and `cfdisk` are packages of their own, `mkfs.ext4` and
 `fsck.ext4` are e2fsprogs', `mkfs.fat` is dosfstools', `zpool` and `zfs` are `zfs`.
 
-On a ZFS root, `/etc/rc` runs `zfs mount -a` right after `mount -a`, which mounts `rpool/home` and `rpool/var`; the root itself was
+On a ZFS root, the boot runs `zfs mount -a` right after `mount -a`, which mounts `rpool/home` and `rpool/var`; the root itself was
 mounted by the initramfs.
 
 ### 6.10 Kernel settings
 
-`/etc/rc` loads every `/etc/sysctl.d/*.conf` and `/etc/sysctl.conf` at boot. The base ships
+The boot loads every `/etc/sysctl.d/*.conf` and `/etc/sysctl.conf` at boot. The base ships
 `/etc/sysctl.d/10-chamesle.conf`: kernel addresses and `dmesg` are for root only (`doas dmesg`), a process may
 `ptrace` only its own children, users get no BPF, links and files in sticky directories like `/tmp` are protected,
 setuid programs leave no core dumps, and the network takes no redirects or source routes and filters spoofed
@@ -878,7 +857,7 @@ A changed file under `/etc` is never written over. When a package brings a new o
 | a BIOS machine does not boot | `limine bios-install /dev/sda` was not run, or `limine-bios.sys` is not in `/boot` |
 | a UEFI machine does not boot | `EFI/BOOT/BOOTX64.EFI` is not on the EFI partition, or the partition is not of type EFI System |
 | no wireless interface | the firmware is missing (7.4); `dmesg` names the file |
-| no devices in `/dev` | udev did not start; check `udev` is in `boot-services` |
+| no devices in `/dev` | udev did not start; `dinitctl status udevd` |
 
 
 ## 10. X and a window manager
@@ -955,7 +934,7 @@ left. Drag a program's icon to the dock to keep it there. `WPrefs` changes the r
     mag install firefox
 
 `firefox-esr` is the long-term one. Firefox and many other programs want a D-Bus session; with `dbus` and `dbus-x11`
-installed and `dbus` in `boot-services` (6.8), start the window manager inside one:
+installed and `dbus` enabled (6.2), start the window manager inside one:
 
     exec dbus-launch --exit-with-session wmaker
 
@@ -978,9 +957,10 @@ X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
 
 | path | what |
 |------|------|
-| `/sbin/init`, `/etc/rc`, `/etc/rc.shutdown` | init, the boot script, the shutdown script, all run by mksh |
-| `/etc/init.conf` | host name, boot services, modules, ttys |
-| `/etc/rc.d/`, `/usr/local/etc/rc.d/` | the service scripts |
+| `/sbin/init` | mounts what dinit needs and starts it |
+| `/etc/dinit.d/`, `/etc/dinit.d/boot.d/` | the services, and the ones started at boot |
+| `/usr/lib/chamesle/` | the boot scripts the services run |
+| `/etc/hostname`, `/etc/modules` | host name, modules loaded at boot |
 | `/etc/profile` | `PATH`, `umask` |
 | `/etc/passwd`, `/etc/shadow`, `/etc/group`, `/etc/shells` | accounts, passwords, groups, login shells |
 | `/etc/fstab` | file systems |
@@ -1008,7 +988,7 @@ X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
 | `system/tools/chamesle-boot` | limine.conf and limine for the system in a directory |
 | `system/tools/chamesle-disk` | cfdisk, vfat boot partition, ZFS root, mounted on `/mnt` |
 | `system/tools/mkapk`, `mkrepo`, `mkpkgs` | packages, signed indexes, Chamesle's own repo |
-| `system/files/` | init, rc, `service`, `init.conf` and the service scripts, in `chamesle-base` |
+| `system/files/` | `/sbin/init`, the dinit services and boot scripts, `service`, in `chamesle-base` |
 | `system/pkg/chamesle-base/` | its scripts, `repos`, `os-release`, `issue` |
 | `system/keys/` | the public keys the repos are signed with |
 | `system/iso/mkiso`, `mkinitramfs`, `init` | the live ISO, its initramfs and the first process in it |

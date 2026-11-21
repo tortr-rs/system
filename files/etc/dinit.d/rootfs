@@ -1,0 +1,4 @@
+type = scripted
+command = /usr/lib/chamesle/rootfs
+options = starts-on-console
+restart = false

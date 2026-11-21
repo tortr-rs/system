@@ -1,2 +1,2 @@
 #!/bin/sh
-exec kill -s USR2 1
+exec /usr/sbin/dinit-poweroff "$@"

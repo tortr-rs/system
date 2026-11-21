@@ -1,0 +1,6 @@
+# "single" on the kernel line: a root shell and nothing else
+type = process
+command = /usr/lib/chamesle/rescue
+options = runs-on-console
+restart = false
+chain-to = boot

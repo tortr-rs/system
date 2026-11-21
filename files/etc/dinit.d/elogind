@@ -1,0 +1,4 @@
+type = process
+command = /usr/libexec/elogind/elogind
+depends-on = dbus
+smooth-recovery = true

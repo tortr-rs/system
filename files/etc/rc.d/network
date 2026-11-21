@@ -1,5 +1,0 @@
-#!/bin/sh
-. /etc/rc.subr
-procname=dhcpcd
-svc_start() { mkdir -p /var/db/dhcpcd /run/dhcpcd; dhcpcd -b; }
-run "$1"

@@ -1,5 +1,0 @@
-#!/bin/sh
-. /etc/rc.subr
-procname=iwd
-svc_start() { /usr/libexec/iwd & }
-run "$1"

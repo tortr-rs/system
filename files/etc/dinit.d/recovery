@@ -1,0 +1,5 @@
+# what dinit runs when boot fails
+type = process
+command = /usr/lib/chamesle/rescue
+options = runs-on-console
+restart = false

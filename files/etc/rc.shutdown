@@ -1,8 +1,0 @@
-#!/bin/sh
-# run by init before it stops: the boot services, last one first
-. /etc/init.sh
-rev=
-for s in $(conf boot-services); do rev="$s $rev"; done
-for s in $rev; do
-	service "$s" stop
-done

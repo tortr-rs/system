@@ -1,0 +1,5 @@
+#!/bin/sh
+# a root shell on the console, when the boot cannot go on
+command -v sulogin >/dev/null && exec sulogin
+echo "a root shell; exit to go on"
+exec /bin/mksh -l

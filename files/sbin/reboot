@@ -1,2 +1,2 @@
 #!/bin/sh
-exec kill -s INT 1
+exec /usr/sbin/dinit-reboot "$@"

@@ -1,5 +1,0 @@
-#!/bin/sh
-. /etc/rc.subr
-procname=wpa_supplicant
-svc_start() { wpa_supplicant -u -B -s; }
-run "$1"

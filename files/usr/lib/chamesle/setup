@@ -1,0 +1,12 @@
+#!/bin/sh
+# at boot, once the file systems are there: clock, host name, kernel settings and modules
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ip link set lo up
+hwclock --hctosys --utc 2>/dev/null
+[ -s /etc/hostname ] && read -r host < /etc/hostname && echo "$host" > /proc/sys/kernel/hostname
+for f in /etc/sysctl.d/*.conf /etc/sysctl.conf; do [ -f "$f" ] && sysctl -q -p "$f"; done
+cat /usr/lib/modules-load.d/*.conf /etc/modules-load.d/*.conf /etc/modules 2>/dev/null | sed 's/#.*//' | while read -r m args; do
+	[ -n "$m" ] && modprobe "$m" $args 2>/dev/null
+done
+dmesg > /var/log/dmesg.boot
+exit 0

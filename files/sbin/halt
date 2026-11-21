@@ -1,2 +1,2 @@
 #!/bin/sh
-exec kill -s USR1 1
+exec /usr/sbin/dinit-halt "$@"

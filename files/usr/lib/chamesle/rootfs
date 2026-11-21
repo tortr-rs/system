@@ -1,0 +1,27 @@
+#!/bin/sh
+# at boot, before any service: checks and mounts the file systems. a failed check gives a root shell
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+mkdir -p /dev/pts /dev/shm
+mountpoint -q /dev/pts || mount -t devpts devpts /dev/pts
+mountpoint -q /dev/shm || mount -t tmpfs -o mode=1777,nosuid,nodev tmpfs /dev/shm
+mountpoint -q /sys/fs/cgroup || mount -t cgroup2 -o nsdelegate cgroup2 /sys/fs/cgroup
+if ! grep -q " / overlay " /proc/mounts; then
+	read -r cmdline < /proc/cmdline
+	case " $cmdline " in
+	*" fastboot "*) ;;
+	*)
+		fsck -A -R -p -T
+		case $? in 0|1) ;; *) echo "the file system check failed, fix it in this shell and exit to go on"; /usr/lib/chamesle/rescue;; esac
+		;;
+	esac
+	mount -o remount,rw / || echo "/ stays read-only"
+fi
+mount -a
+command -v zfs >/dev/null && zfs mount -a
+swapon -a
+mountpoint -q /tmp || rm -rf /tmp/* /tmp/.[!.]*
+chmod 1777 /tmp
+mkdir -p /var/log /var/db /var/lib /var/cache /var/tmp
+chmod 1777 /var/tmp
+[ -e /var/run ] || ln -s ../run /var/run
+exit 0

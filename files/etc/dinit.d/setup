@@ -1,0 +1,4 @@
+type = scripted
+command = /usr/lib/chamesle/setup
+depends-on = rootfs
+restart = false

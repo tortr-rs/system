@@ -2,9 +2,9 @@
 # shutdown -r|-h|-p [now|+minutes] [message]
 usage() { echo "usage: shutdown -r|-h|-p [now|+minutes] [message]" >&2; exit 2; }
 case $1 in
--r) sig=INT;;
--h) sig=USR1;;
--p) sig=USR2;;
+-r) how=reboot;;
+-h) how=halt;;
+-p) how=poweroff;;
 *) usage;;
 esac
 shift
@@ -15,4 +15,4 @@ now) ;;
 +[0-9]*) [ $# -gt 0 ] && wall "$*"; sleep $((${when#+} * 60));;
 *) usage;;
 esac
-exec kill -s $sig 1
+exec /usr/sbin/dinit-$how
