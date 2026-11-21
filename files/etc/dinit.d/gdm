@@ -1,5 +1,5 @@
 type = process
 command = /usr/sbin/gdm
-depends-on = elogind
-waits-for = NetworkManager
+depends-on = dbus
+waits-for = elogind
 restart = true

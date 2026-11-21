@@ -1,0 +1,6 @@
+type = process
+command = /usr/sbin/greetd
+depends-on = system
+waits-for = seatd
+waits-for = elogind
+restart = true

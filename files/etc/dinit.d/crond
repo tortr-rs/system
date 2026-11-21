@@ -1,0 +1,4 @@
+type = process
+command = /usr/lib/chamesle/foreground crond
+depends-on = system
+smooth-recovery = true

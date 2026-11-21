@@ -1,0 +1,4 @@
+type = process
+command = /bin/sh -c "ssh-keygen -A && exec /usr/sbin/sshd -D -e"
+depends-on = system
+smooth-recovery = true

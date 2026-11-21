@@ -63,7 +63,7 @@ Both are in `/etc/mag/repos`. A package is checked against the keys in `/etc/mag
 
 | directory | what is in it |
 |-----------|---------------|
-| `system/` | `tools/` (`chamesle-bootstrap`, `chamesle-chroot`, `chamesle-disk`, `chamesle-boot`, and `mkapk`, `mkrepo`, `mkpkgs` for the repo), `files/` (init, rc and the services), `pkg/`, `keys/`, `iso/`, this handbook |
+| `system/` | `tools/` (`chamesle-bootstrap`, `chamesle-disk`, `chamesle-boot`, and `mkapk`, `mkrepo`, `mkpkgs` for the repo), `files/` (init, rc and the services), `pkg/`, `keys/`, `iso/`, this handbook |
 | `mag/`    | `mag.c`, `c.h`, `build.sh` |
 | `rifle/`  | `rifle.c`, `build.sh`, `tests/run.sh` |
 
@@ -198,16 +198,16 @@ Packages after the target go in too. A ThinkPad with Intel wireless and graphics
     chamesle-bootstrap -n t480 -f linux-firmware-intel /mnt vim
 
 What `chamesle-base` brings: dinit and the files of chapter 6, mag, rifle, mksh, busybox for the tools rifle does not
-have, `agetty`, eudev, kmod, dhcpcd, e2fsprogs and curl.
+have, bash, `agetty`, eudev, kmod, dhcpcd, e2fsprogs, curl and `arch-chroot`.
 
 ### 3.4 Working inside the new root
 
-    chamesle-chroot /mnt
-    chamesle-chroot /mnt passwd root
+    arch-chroot /mnt
+    arch-chroot /mnt passwd root
 
-It mounts `proc`, `sys`, `dev`, `dev/pts` and a tmpfs on `run` under the directory, copies `/etc/resolv.conf` into it, runs
-`chroot` with an empty environment (`HOME=/root`, `TERM`, `PATH`) and takes the mounts away again when the command ends.
-Without a command it starts `/bin/mksh -l`. Inside, `mag install name` works as on the finished system.
+`arch-chroot` is Arch's, the same script. It mounts `proc`, `sys`, `dev`, `dev/pts`, `dev/shm`, `run` and `tmp` under
+the directory, puts the live system's `/etc/resolv.conf` in it, and takes the mounts away again when the command ends.
+Without a command it starts bash. Inside, `mag install name` works as on the finished system.
 
 ### 3.5 fstab
 
@@ -232,7 +232,7 @@ A root on ZFS gets no root line.
 
 The host name is in `/mnt/etc/hostname`, from `-n`. Set the root password:
 
-    chamesle-chroot /mnt passwd root
+    arch-chroot /mnt passwd root
 
 The hash goes into `/etc/shadow`. The login shell of root is mksh.
 
@@ -279,12 +279,12 @@ A root on ZFS names the dataset; the initramfs needs the zfs module, which is se
 Install limine into the new root, and use its files, not the ones of the live system; the two can differ in version, and
 limine's BIOS stage only works with a `limine-bios.sys` of its own version:
 
-    chamesle-chroot /mnt mag install limine
+    arch-chroot /mnt mag install limine
 
 #### BIOS
 
     cp /mnt/usr/share/limine/limine-bios.sys /mnt/boot/
-    chamesle-chroot /mnt limine bios-install /dev/sda
+    arch-chroot /mnt limine bios-install /dev/sda
 
 `limine bios-install` writes the loader to the start of the disk and into the BIOS boot partition, which a GPT disk
 needs (3.1). `limine-bios.sys` on the FAT partition is the part it loads.
@@ -569,9 +569,10 @@ boot fails, dinit starts a root shell too.
 
 ### 6.2 Services
 
-A service is a file in `/etc/dinit.d` named after it. The base set has `dbus`, `dhcpcd`, `elogind`, `gdm`, `iwd`,
-`NetworkManager`, `wpa_supplicant` and the logins `tty1` to `tty6` and `ttyS0`, for when those packages are installed.
-`dinitctl` does the rest:
+A service is a file in `/etc/dinit.d` named after it. The base set has one for every common daemon, ready for when its
+package is installed: `dbus`, `elogind`, `seatd`, `dhcpcd`, `iwd`, `wpa_supplicant`, `NetworkManager`, `connmand`,
+`lightdm`, `sddm`, `gdm`, `xdm`, `greetd`, `sshd`, `chronyd`, `ntpd`, `crond`, `syslogd`, `klogd`, `acpid`, `cupsd`,
+`bluetoothd`, `avahi-daemon`, and the logins `tty1` to `tty6` and `ttyS0`. `dinitctl` does the rest:
 
     dinitctl list                    every service that is loaded, and its state
     dinitctl start iwd
@@ -582,7 +583,8 @@ A service is a file in `/etc/dinit.d` named after it. The base set has `dbus`, `
     dinitctl disable dhcpcd          not at boot any more
 
 `enable` and `disable` make and remove a link in `/etc/dinit.d/boot.d`; that directory is the list of what starts
-at boot. A fresh install has `dhcpcd` and `tty1` to `tty6` in it. `service NAME start` and the rest still work and
+at boot. A fresh install has `dhcpcd` and `tty1` to `tty6` in it. As a user in `wheel`, `dinitctl` asks for your
+password through doas. Where dinit is not running, in `arch-chroot /mnt` for one, `enable` and `disable` still work. `service NAME start` and the rest still work and
 run `dinitctl`.
 
 A service whose process dies is started again, unless it dies over and over in a few seconds; then dinit gives up and
@@ -780,7 +782,7 @@ The live ISO has its own initramfs, made by `iso/mkinitramfs`, which mounts the 
 The ISO is a live system to work from. It boots on BIOS and UEFI machines with limine, from a disc or a stick, logs in as
 root on every tty and has
 
-* mag, the keys and the repos, and `chamesle-bootstrap`, `chamesle-chroot`, `chamesle-disk`, `chamesle-boot`
+* mag, the keys and the repos, and `chamesle-bootstrap`, `chamesle-disk`, `chamesle-boot`, `arch-chroot`
 * the disk tools: `cfdisk`, `sfdisk`, `lsblk`, `blkid`, `mkfs.ext4`, `mkfs.fat`, `zpool`, `zfs`, `limine`
 * the network: `dhcpcd`, `iwd` with `iwctl`, `wpa_supplicant`, `curl`
 * the Intel wireless firmware, vim, less, and this handbook in `/usr/share/doc/chamesle/handbook.md`
@@ -984,7 +986,6 @@ X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
 | path | what |
 |------|------|
 | `system/tools/chamesle-bootstrap` | puts the base into a root with mag |
-| `system/tools/chamesle-chroot` | chroot with the pseudo file systems mounted |
 | `system/tools/chamesle-boot` | limine.conf and limine for the system in a directory |
 | `system/tools/chamesle-disk` | cfdisk, vfat boot partition, ZFS root, mounted on `/mnt` |
 | `system/tools/mkapk`, `mkrepo`, `mkpkgs` | packages, signed indexes, Chamesle's own repo |
@@ -1001,7 +1002,7 @@ X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
 ### 11.3 Commands in short
 
     chamesle-bootstrap [-a ARCH] [-n HOSTNAME] [-k KERNEL] [-f FIRMWARE] TARGET [PACKAGE]...
-    chamesle-chroot DIR [COMMAND...]
+    arch-chroot DIR [COMMAND...]
     chamesle-disk DISK
     chamesle-boot [DIR]
     mag [-nf] update|install|build|remove|upgrade|autoremove|list|info|search|files|owns|deps|rdeps|fetch

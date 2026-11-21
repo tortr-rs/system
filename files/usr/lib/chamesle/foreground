@@ -1,0 +1,12 @@
+#!/bin/sh
+# foreground NAME ARGS...: crond, ntpd, syslogd or klogd in the foreground, busybox's or the real one; they spell it differently
+n=$1
+shift
+p=$(command -v "$n") || exit 127
+case $n:$(readlink -f "$p") in
+crond:*/busybox) exec "$p" -f "$@";;
+crond:*) exec "$p" -n "$@";;
+ntpd:*/busybox) exec "$p" -n "$@";;
+ntpd:*) exec "$p" -d "$@";;
+*) exec "$p" -n "$@";;
+esac

@@ -16,7 +16,7 @@ mkdir -p "$tmp/mag/usr/bin"
 install -m755 "$MAG" "$tmp/mag/usr/bin/mag"
 mkapk -n mag -v "$("$MAG" --version | cut -d' ' -f2)" -d "the package manager" "$tmp/mag"
 
-deps="alpine-baselayout busybox busybox-binsh busybox-suid doas mksh agetty dinit dinit-shutdown eudev kmod dhcpcd e2fsprogs dosfstools curl mag"
+deps="alpine-baselayout busybox busybox-binsh busybox-suid doas mksh agetty bash mount umount findmnt util-linux-misc dinit dinit-shutdown eudev kmod dhcpcd e2fsprogs dosfstools curl mag"
 if [ -n "$RIFLE" ]; then
 	mkdir -p "$tmp/rifle/usr/bin"
 	install -m755 "$RIFLE" "$tmp/rifle/usr/bin/rifle"
@@ -33,7 +33,7 @@ cp "$here/keys/"*.pub "$b/etc/mag/keys/"
 ln -s ../mag/keys "$b/etc/apk/keys"
 cp "$here/pkg/chamesle-base/repos" "$b/etc/mag/repos"
 cp "$here/pkg/chamesle-base/os-release" "$here/pkg/chamesle-base/issue" "$b/etc/"
-for t in chamesle-bootstrap chamesle-chroot chamesle-disk chamesle-boot; do install -m755 "$here/tools/$t" "$b/usr/bin/$t"; done
+for t in chamesle-bootstrap chamesle-disk chamesle-boot; do install -m755 "$here/tools/$t" "$b/usr/bin/$t"; done
 cp "$here/handbook/handbook.md" "$b/usr/share/doc/chamesle/handbook.md"
 mkapk -n chamesle-base -v "$(date +%Y%m%d)-r${REL:-0}" -d "dinit's services, the files in /etc and the tools of Chamesle" \
 	-D "$deps" -s "$here/pkg/chamesle-base" "$b"
