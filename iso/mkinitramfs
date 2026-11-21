@@ -12,24 +12,38 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp"/bin "$tmp"/dev "$tmp"/proc "$tmp"/sys "$tmp"/run "$tmp"/mnt "$tmp"/lib/modules
 rd=$(command -v llvm-readelf || command -v readelf) || { echo "mkinitramfs: no readelf" >&2; exit 1; }
+# a path in the root with its links followed inside the root, since a link there may point at /bin/busybox
+inroot() {
+	f=$1
+	while [ -L "$f" ]; do
+		l=$(readlink "$f")
+		case $l in /*) f=$root$l;; *) f=${f%/*}/$l;; esac
+	done
+	echo "$f"
+}
 # copy what a binary links against: the musl loader and every NEEDED library found in the root
 needed() {
 	$rd -d "$1" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | while read -r l; do
 		[ -e "$tmp/usr/lib/$l" ] && continue
 		for d in usr/lib lib; do
-			[ -e "$root/$d/$l" ] || continue
+			[ -e "$root/$d/$l" ] || [ -L "$root/$d/$l" ] || continue
 			mkdir -p "$tmp/usr/lib"
-			cp -L "$root/$d/$l" "$tmp/usr/lib/$l"
-			needed "$root/$d/$l"
+			cp "$(inroot "$root/$d/$l")" "$tmp/usr/lib/$l"
+			needed "$(inroot "$root/$d/$l")"
 			break
 		done
 	done
 }
 mkdir -p "$tmp/lib" "$tmp/usr/lib"
-cp -L "$root/usr/lib/libc.so" "$tmp/lib/ld-musl-x86_64.so.1"
+for l in "$root"/lib/ld-musl-*.so.1; do cp "$(inroot "$l")" "$tmp/lib/${l##*/}"; done
 for t in sh mount umount switch_root insmod mkdir sleep blkid; do
 	f=
-	for d in usr/bin bin usr/sbin sbin; do [ -x "$root/$d/$t" ] && { f=$root/$d/$t; break; }; done
+	for d in usr/bin bin usr/sbin sbin; do
+		[ -e "$root/$d/$t" ] || [ -L "$root/$d/$t" ] || continue
+		f=$(inroot "$root/$d/$t")
+		[ -x "$f" ] && break
+		f=
+	done
 	[ -n "$f" ] || { echo "mkinitramfs: no $t in $root" >&2; exit 1; }
 	cp "$f" "$tmp/bin/$t"
 	needed "$f"
@@ -54,7 +68,7 @@ if [ -n "$list" ]; then
 fi
 for d in usr/sbin sbin usr/bin bin; do
 	[ -x "$root/$d/zpool" ] || continue
-	cp "$root/$d/zpool" "$tmp/bin/zpool"
+	cp "$(inroot "$root/$d/zpool")" "$tmp/bin/zpool"
 	needed "$root/$d/zpool"
 	break
 done

@@ -1,0 +1,71 @@
+#!/bin/sh
+# mkapk: packs DIR into a package mag installs, signed with KEY, and leaves its index entry in OUT/.idx for mkrepo.
+#   mkapk -k KEY -n NAME -v VERSION -a ARCH -d DESC [-D DEPS] [-s SCRIPTS] [-o OUT] DIR
+# SCRIPTS is a directory with any of post-install, pre-upgrade and the rest
+set -e
+# GNU tar, for --record-size and --sort
+tar=$(command -v gtar || echo tar)
+deps= scripts= out=.
+while getopts k:n:v:a:d:D:s:o: o; do
+	case $o in
+	k) key=$OPTARG;; n) name=$OPTARG;; v) ver=$OPTARG;; a) arch=$OPTARG;; d) desc=$OPTARG;;
+	D) deps=$OPTARG;; s) scripts=$OPTARG;; o) out=$OPTARG;;
+	*) exit 2;;
+	esac
+done
+shift $((OPTIND - 1))
+dir=$1
+if [ -z "$key" ] || [ -z "$name" ] || [ -z "$ver" ] || [ -z "$arch" ] || [ ! -d "$dir" ]; then
+	echo "usage: mkapk -k KEY -n NAME -v VERSION -a ARCH -d DESC [-D DEPS] [-s SCRIPTS] [-o OUT] DIR" >&2
+	exit 2
+fi
+mkdir -p "$out/.idx"
+tmp=$(mktemp -d "$out/.mkapk.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+mkdir "$tmp/c" "$tmp/s"
+
+# the signature and the control part are tar without the two zero blocks at the end, so the pieces run on into each other
+seg() { $tar --format=ustar --record-size=512 --owner=0 --group=0 --numeric-owner -C "$1" -cf - "$2" $3 | head -c -1024 | gzip -9n; }
+
+$tar --format=gnu --owner=0 --group=0 --numeric-owner --sort=name -C "$dir" -cf - . | gzip -9n > "$tmp/data.tar.gz"
+{
+	echo "pkgname = $name"
+	echo "pkgver = $ver"
+	echo "pkgdesc = $desc"
+	echo "url = https://chamesle.org"
+	echo "builddate = $(date +%s)"
+	echo "size = $(du -sb "$dir" | cut -f1)"
+	echo "arch = $arch"
+	echo "license = BSD-2-Clause"
+	for d in $deps; do echo "depend = $d"; done
+	echo "datahash = $(sha256sum "$tmp/data.tar.gz" | cut -d' ' -f1)"
+} > "$tmp/c/.PKGINFO"
+more=
+for s in pre-install post-install pre-upgrade post-upgrade pre-deinstall post-deinstall trigger; do
+	[ -n "$scripts" ] && [ -f "$scripts/$s" ] || continue
+	install -m755 "$scripts/$s" "$tmp/c/.$s"
+	more="$more .$s"
+done
+seg "$tmp/c" .PKGINFO "$more" > "$tmp/control.tar.gz"
+
+kn=$(basename "$key").pub
+openssl dgst -sha256 -sign "$key" -out "$tmp/s/.SIGN.RSA256.$kn" "$tmp/control.tar.gz"
+seg "$tmp/s" ".SIGN.RSA256.$kn" > "$tmp/sig.tar.gz"
+
+old=$(cat "$out/.idx/$name" 2>/dev/null | sed -n "s/^V://p")
+if [ -n "$old" ] && [ "$old" != "$ver" ]; then rm -f "$out/$name-$old.apk"; fi
+cat "$tmp/sig.tar.gz" "$tmp/control.tar.gz" "$tmp/data.tar.gz" > "$out/$name-$ver.apk"
+{
+	echo "C:Q1$(openssl dgst -sha1 -binary "$tmp/control.tar.gz" | base64 -w0)"
+	echo "P:$name"
+	echo "V:$ver"
+	echo "A:$arch"
+	echo "S:$(wc -c < "$out/$name-$ver.apk")"
+	echo "I:$(du -sb "$dir" | cut -f1)"
+	echo "T:$desc"
+	echo "U:https://chamesle.org"
+	echo "L:BSD-2-Clause"
+	if [ -n "$deps" ]; then echo "D:$(echo $deps)"; fi
+	echo
+} > "$out/.idx/$name"
+echo "$out/$name-$ver.apk"

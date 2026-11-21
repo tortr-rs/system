@@ -1,0 +1,40 @@
+#!/bin/sh
+# mkpkgs ARCH OUT: Chamesle's own packages for one arch, signed with KEY, and the index of OUT.
+#   KEY=~/.chamesle-keys/chamesle-20261118.rsa MAG=~/src/mag/mag RIFLE=~/src/rifle/rifle mkpkgs x86_64 repo/x86_64
+# RIFLE is left out where rifle does not build (it is x86_64 only for now). REL is the -rN of the base's version
+set -e
+here=$(cd "$(dirname "$0")/.." && pwd)
+[ $# = 2 ] && [ -f "$KEY" ] && [ -x "$MAG" ] || { echo "usage: KEY=... MAG=... [RIFLE=...] mkpkgs ARCH OUT" >&2; exit 2; }
+arch=$1 out=$2
+mkdir -p "$out"
+tmp=$(mktemp -d "$out/.mkpkgs.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+mkapk() { "$here/tools/mkapk" -k "$KEY" -a "$arch" -o "$out" "$@"; }
+
+mkdir -p "$tmp/mag/usr/bin"
+install -m755 "$MAG" "$tmp/mag/usr/bin/mag"
+mkapk -n mag -v "$("$MAG" --version | cut -d' ' -f2)" -d "the package manager" "$tmp/mag"
+
+deps="alpine-baselayout busybox busybox-binsh mksh agetty eudev kmod dhcpcd e2fsprogs dosfstools curl mag"
+if [ -n "$RIFLE" ]; then
+	mkdir -p "$tmp/rifle/usr/bin"
+	install -m755 "$RIFLE" "$tmp/rifle/usr/bin/rifle"
+	for t in $("$RIFLE" --list); do ln -s rifle "$tmp/rifle/usr/bin/$t"; done
+	mkapk -n rifle -v "$("$RIFLE" --version | head -n 1 | cut -d' ' -f2)" -d "the coreutils, in one program" "$tmp/rifle"
+	deps="$deps rifle"
+fi
+
+b=$tmp/base
+cp -R "$here/files" "$b"
+rm -f "$b/etc/hosts" "$b/etc/services" "$b/usr/bin/cc" "$b/usr/bin/zcat"
+mkdir -p "$b/etc/mag/keys" "$b/etc/apk" "$b/usr/bin" "$b/usr/share/doc/chamesle"
+cp "$here/keys/"*.pub "$b/etc/mag/keys/"
+ln -s ../mag/keys "$b/etc/apk/keys"
+cp "$here/pkg/chamesle-base/repos" "$b/etc/mag/repos"
+cp "$here/pkg/chamesle-base/os-release" "$here/pkg/chamesle-base/issue" "$b/etc/"
+for t in chamesle-bootstrap chamesle-chroot chamesle-disk; do install -m755 "$here/tools/$t" "$b/usr/bin/$t"; done
+cp "$here/handbook/handbook.md" "$b/usr/share/doc/chamesle/handbook.md"
+mkapk -n chamesle-base -v "$(date +%Y%m%d)-r${REL:-0}" -d "Winchester, the files in /etc and the tools of Chamesle" \
+	-D "$deps" -s "$here/pkg/chamesle-base" "$b"
+
+"$here/tools/mkrepo" "$out" "$KEY"

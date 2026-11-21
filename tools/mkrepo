@@ -1,0 +1,18 @@
+#!/bin/sh
+# mkrepo DIR KEY: the signed APKINDEX.tar.gz for the packages mkapk put in DIR
+set -e
+# GNU tar, for --record-size and --sort
+tar=$(command -v gtar || echo tar)
+[ $# = 2 ] && [ -d "$1/.idx" ] || { echo "usage: mkrepo DIR KEY" >&2; exit 2; }
+dir=$1 key=$2
+tmp=$(mktemp -d "$dir/.mkrepo.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+mkdir "$tmp/i" "$tmp/s"
+cat "$dir"/.idx/* > "$tmp/i/APKINDEX"
+echo "chamesle $(date +%Y%m%d)" > "$tmp/i/DESCRIPTION"
+$tar --format=ustar --owner=0 --group=0 --numeric-owner -C "$tmp/i" -cf - DESCRIPTION APKINDEX | gzip -9n > "$tmp/index.tar.gz"
+kn=$(basename "$key").pub
+openssl dgst -sha256 -sign "$key" -out "$tmp/s/.SIGN.RSA256.$kn" "$tmp/index.tar.gz"
+$tar --format=ustar --record-size=512 --owner=0 --group=0 --numeric-owner -C "$tmp/s" -cf - ".SIGN.RSA256.$kn" | head -c -1024 | gzip -9n > "$tmp/sig.tar.gz"
+cat "$tmp/sig.tar.gz" "$tmp/index.tar.gz" > "$dir/APKINDEX.tar.gz"
+echo "$dir/APKINDEX.tar.gz: $(grep -c '^P:' "$tmp/i/APKINDEX") packages"

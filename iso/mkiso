@@ -1,80 +1,52 @@
 #!/bin/sh
-# mkiso: builds the Chamesle live ISO from a profile.
-#   mkiso -r $HOME/src/mag/repo:/usr/pkgsrc
-#   mkiso -R /srv/rootfs -o chamesle.iso
-#   MAGREPO=$HOME/src/mag/repo mkiso ...  the recipes the image carries for mag search and info
+# mkiso: the Chamesle live ISO, with mag putting chamesle-base, the kernel and profile/packages in its root.
+#   mkiso -o chamesle.iso
+#   mkiso -a x86 -o chamesle-x86.iso
+# MAG is the mag to build with (default: the one in PATH), REPOS a repos file to build from instead of chamesle-base's
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 profile=$here/profile
 work=$PWD/work
 out=chamesle.iso
-while getopts p:r:R:w:o: o; do
+arch=x86_64
+while getopts a:p:w:o: o; do
 	case $o in
+	a) arch=$OPTARG;;
 	p) profile=$OPTARG;;
-	r) MAG_REPO=$OPTARG;;
-	R) rootfs=$OPTARG;;
 	w) work=$OPTARG;;
 	o) out=$OPTARG;;
-	*) echo "usage: mkiso [-p profile] [-r repos] [-R rootfs] [-w workdir] [-o out.iso]" >&2; exit 2;;
+	*) echo "usage: mkiso [-a arch] [-p profile] [-w workdir] [-o out.iso]" >&2; exit 2;;
 	esac
 done
-export MAG_REPO
-if [ -z "$MAGREPO" ]; then
-	for d in "$here/../../mag/repo" $(echo "$MAG_REPO" | tr : ' '); do
-		[ -f "$d/PROVIDES" ] && { MAGREPO=$d; break; }
-	done
-fi
 : "${MKISOFS:=xorriso -as mkisofs}"
-: "${LIMINE:=/usr/share/limine}"
 die() { echo "mkiso: $*" >&2; exit 1; }
-[ -d "$LIMINE" ] && [ -f "$LIMINE/limine-bios-cd.bin" ] || die "no limine files in $LIMINE (set LIMINE)"
-for t in mksquashfs ${MKISOFS%% *} zstd bsdcpio limine; do command -v $t >/dev/null || die "$t is not installed"; done
-
-iso=$work/iso
-mkdir -p "$work"
-rm -rf "$iso"
-mkdir -p "$iso/boot/limine" "$iso/EFI/BOOT" "$iso/LiveOS"
-
-if [ -z "$rootfs" ]; then
-	rootfs=$work/rootfs
-	rm -rf "$rootfs"
-	"$here/../tools/chamesle-bootstrap" -s "$(grep -v '^#' "$profile/packages" | tr '\n' ' ')" -n chamesle-live "$rootfs"
-else
-	from=$rootfs
-	rm -rf "$work/rootfs"
-	cp -a "$rootfs" "$work/rootfs"
-	rootfs=$work/rootfs
-fi
+[ "$(id -u)" = 0 ] || die "run it as root, the files of the image belong to root"
 [ -n "$MAG" ] || MAG=$(command -v mag) || die "no mag: put it in PATH or set MAG"
-MAG_ROOT=$rootfs MAG_PREFIX=/usr "$MAG" relocate ${from:+"$from"}
+for t in mksquashfs ${MKISOFS%% *} zstd bsdcpio; do command -v $t >/dev/null || die "$t is not installed"; done
 
-rm -rf "$rootfs"/var/cache/mag "$rootfs"/var/tmp/mag "$rootfs"/lib/firmware
-# KEEPDEV=1 keeps the headers and static libraries, so the compiler in the image can build things
-if [ -z "$KEEPDEV" ]; then
-	rm -rf "$rootfs"/usr/include "$rootfs"/usr/lib/pkgconfig
-	find "$rootfs"/usr/lib -name "*.a" -o -name "*.la" | xargs rm -f
-fi
+iso=$work/iso rootfs=$work/rootfs
+rm -rf "$iso" "$rootfs"
+mkdir -p "$iso/boot/limine" "$iso/EFI/BOOT" "$iso/LiveOS" "$rootfs/etc/mag"
+cp "${REPOS:-$here/../pkg/chamesle-base/repos}" "$rootfs/etc/mag/repos"
+cp -R "$here/../keys" "$rootfs/etc/mag/keys"
+echo "$arch" > "$rootfs/etc/mag/arch"
+# CACHE is a directory to keep the downloaded packages in between builds
+[ -z "$CACHE" ] || { mkdir -p "$CACHE" "$rootfs/var/cache/mag"; cp -R "$CACHE" "$rootfs/var/cache/mag/pkg"; }
+MAG_ROOT=$rootfs "$MAG" update
+MAG_ROOT=$rootfs "$MAG" install chamesle-base linux-lts $(grep -v '^#' "$profile/packages")
+[ -z "$CACHE" ] || cp "$rootfs"/var/cache/mag/pkg/* "$CACHE/"
+cp "$here/../pkg/chamesle-base/repos" "$rootfs/etc/mag/repos"
 tar -C "$profile/overlay" -cf - . | tar -C "$rootfs" -xf -
-for t in chamesle-bootstrap chamesle-chroot chamesle-disk; do
-	install -Dm755 "$here/../tools/$t" "$rootfs/usr/bin/$t"
-done
-if [ -n "$MAGREPO" ]; then
-	mkdir -p "$rootfs/usr/share/mag/repo"
-	cp -R "$MAGREPO/." "$rootfs/usr/share/mag/repo/"
-fi
-install -Dm644 "$here/../handbook/handbook.md" "$rootfs/usr/share/doc/chamesle/handbook.md"
-install -Dm755 "$MAG" "$rootfs/usr/bin/mag"
-vmlinuz=$(ls "$rootfs"/boot/vmlinuz-* | head -n 1)
-kver=$(ls "$rootfs/lib/modules" | head -n 1)
-[ -f "$vmlinuz" ] && [ -n "$kver" ] || die "no kernel in the root: boot/vmlinuz-* and lib/modules/* are missing"
-cp "$vmlinuz" "$iso/boot/vmlinuz"
+rm -rf "$rootfs"/var/cache/mag/pkg "$rootfs"/var/tmp/mag "$rootfs"/boot/initramfs-*
 
-depmod -b "$rootfs" "$kver"
+kver=$(ls "$rootfs/lib/modules" | head -n 1)
+[ -f "$rootfs/boot/vmlinuz-lts" ] && [ -n "$kver" ] || die "no kernel in the root"
+cp "$rootfs/boot/vmlinuz-lts" "$iso/boot/vmlinuz"
 "$here/mkinitramfs" -m "$profile/modules" "$rootfs" "$kver" "$iso/boot/initrd"
 
-rm -f "$iso/LiveOS/rootfs.sfs"
-mksquashfs "$rootfs" "$iso/LiveOS/rootfs.sfs" -all-root -comp zstd -Xcompression-level 19 -b 256K -noappend -no-progress >/dev/null
+mksquashfs "$rootfs" "$iso/LiveOS/rootfs.sfs" -comp zstd -Xcompression-level 19 -b 256K -noappend -no-progress >/dev/null
 
+LIMINE=$rootfs/usr/share/limine
 cp "$LIMINE"/limine-bios.sys "$LIMINE"/limine-bios-cd.bin "$LIMINE"/limine-uefi-cd.bin "$iso/boot/limine/"
 cp "$LIMINE"/BOOTX64.EFI "$iso/EFI/BOOT/"
 cp "$profile/limine.conf" "$iso/boot/limine/limine.conf"
@@ -82,6 +54,7 @@ cp "$profile/limine.conf" "$iso/boot/limine/limine.conf"
 $MKISOFS -R -r -J -V CHAMESLE \
 	-b boot/limine/limine-bios-cd.bin -no-emul-boot -boot-load-size 4 -boot-info-table \
 	--efi-boot boot/limine/limine-uefi-cd.bin -efi-boot-part --efi-boot-image --protective-msdos-label \
-	-o "$out" "$iso" >/dev/null 2>&1 || { echo "mkiso: $MKISOFS failed" >&2; exit 1; }
-limine bios-install "$out" >/dev/null
+	-o "$out" "$iso" >/dev/null 2>&1 || die "$MKISOFS failed"
+# the root's limine, so its stages match the limine-bios.sys on the ISO, run with the root's own musl
+"$rootfs"/lib/ld-musl-*.so.1 --library-path "$rootfs/lib:$rootfs/usr/lib" "$rootfs/usr/bin/limine" bios-install "$out" >/dev/null
 echo "$out: $(du -h "$out" | cut -f1)"

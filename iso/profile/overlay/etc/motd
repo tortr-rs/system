@@ -1,4 +1,3 @@
-
-  Chamesle live system. The handbook is in /usr/share/doc/chamesle/handbook.md
-  (chapter 3 is the install). vim and mksh are here.
+  Chamesle live system. The handbook is /usr/share/doc/chamesle/handbook.md, chapter 3 is the install.
+  Network: dhcpcd on a cable, iwctl for wireless.
 

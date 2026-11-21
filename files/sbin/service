@@ -11,7 +11,7 @@ find_script() {
 case $1 in
 -l)
 	for d in $dirs; do
-		for f in $d/*; do [ -x "$f" ] && echo "${f##*/}"; done
+		for f in $d/*; do if [ -x "$f" ]; then echo "${f##*/}"; fi; done
 	done;;
 -e)
 	for s in $(conf boot-services); do

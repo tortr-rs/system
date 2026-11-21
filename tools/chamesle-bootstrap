@@ -1,93 +1,44 @@
 #!/bin/sh
-# chamesle-bootstrap TARGET: makes a root file system in TARGET, like debootstrap does for Debian.
-# the directories, init and its files from files/, the files in /etc, then every package of the base set built and installed there with mag.
-#   chamesle-bootstrap /mnt/root
-#   chamesle-bootstrap -r ~/repos/ports -s "shells/mksh editors/vim" /srv/chroot
+# chamesle-bootstrap TARGET [PACKAGE]...: puts the Chamesle base into TARGET with mag, like debootstrap does for Debian.
+# the repos and the keys are this system's, from /etc/mag. the base is chamesle-base, a kernel and what they need.
+#   chamesle-bootstrap /mnt
+#   chamesle-bootstrap -a x86 -n box /mnt vim
 set -e
-here=$(cd "$(dirname "$0")" && pwd)
 usage() {
-	echo "usage: chamesle-bootstrap [-r REPOS] [-s PACKAGES] [-n HOSTNAME] TARGET" >&2
-	echo "  -r  repos split by colons, what mag takes in MAG_REPO (default: \$MAG_REPO)" >&2
-	echo "  -s  the packages to install instead of the base set" >&2
+	echo "usage: chamesle-bootstrap [-a ARCH] [-n HOSTNAME] [-k KERNEL] [-f FIRMWARE] TARGET [PACKAGE]..." >&2
+	echo "  -a  x86_64, x86 and so on (default: this machine's)" >&2
 	echo "  -n  host name of the new system (default chamesle)" >&2
+	echo "  -k  the kernel package (default linux-lts), -f its firmware (default linux-firmware-none)" >&2
 	exit 2
 }
-base="sys-libs/musl devel/gmake lang/nawk archivers/libarchive app-arch/bsdtar archivers/pigz shells/mksh sys-apps/util-linux sys-apps/kmod sys-apps/eudev net/dhcpcd net/tnftp sysutils/e2fsprogs sysutils/dosfstools sys-boot/limine sys-kernel/linux sys-kernel/linux-firmware sys-firmware/sof-firmware sys-firmware/wireless-regdb editors/vim sys-fs/zfs sys-kernel/zfs-module lang/clang devel/lld lang/compiler-rt lang/libunwind"
-name=chamesle
-while getopts r:s:n: o; do
+arch= name=chamesle kernel=linux-lts firmware=linux-firmware-none
+while getopts a:n:k:f: o; do
 	case $o in
-	r) MAG_REPO=$OPTARG;;
-	s) base=$OPTARG;;
+	a) arch=$OPTARG;;
 	n) name=$OPTARG;;
+	k) kernel=$OPTARG;;
+	f) firmware=$OPTARG;;
 	*) usage;;
 	esac
 done
 shift $((OPTIND - 1))
-[ $# = 1 ] || usage
+[ $# -ge 1 ] || usage
 target=$1
-[ -n "$MAG_REPO" ] || { echo "chamesle-bootstrap: no repos: give -r or set MAG_REPO" >&2; exit 1; }
+shift
+[ "$(id -u)" = 0 ] || { echo "chamesle-bootstrap: run it as root" >&2; exit 1; }
 command -v mag >/dev/null || { echo "chamesle-bootstrap: mag is not in PATH" >&2; exit 1; }
-[ "$(id -u)" = 0 ] || echo "chamesle-bootstrap: not root, so files will belong to you and the device nodes are skipped" >&2
-mkdir -p "$target"
-cd "$target"
-for d in bin boot dev etc/skel home lib lib/firmware mnt proc root run sbin srv sys tmp usr/bin usr/lib usr/sbin usr/share usr/local/bin usr/local/etc/services var/cache var/lib var/log var/tmp; do
-	mkdir -p "$d"
-done
-chmod 1777 tmp var/tmp
-chmod 700 root
-ln -sfn ../run var/run
-files=$here/../files
-put() {
-	for f in "$1"/*; do
-		d=${f#"$files"/}
-		if [ -d "$f" ]; then
-			mkdir -p "$d"
-			put "$f"
-		elif [ -x "$f" ]; then
-			install -m755 "$f" "$d"
-		elif [ "$d" = etc/init.conf ]; then
-			[ -e "$d" ] || while IFS= read -r l; do
-				case $l in hostname*) l="hostname = $name";; esac
-				echo "$l"
-			done < "$f" > "$d"
-		else
-			install -m644 "$f" "$d"
-		fi
-	done
-}
-put "$files"
-[ -e etc/passwd ] || cat > etc/passwd <<P
-root:x:0:0:root:/root:/usr/bin/mksh
-dhcpcd:x:200:200:dhcpcd:/var/db/dhcpcd:/bin/false
-dbus:x:81:81:system bus:/run/dbus:/bin/false
-P
-[ -e etc/group ] || printf 'root:x:0:\nbin:x:1:\ndaemon:x:2:\nsys:x:3:\nadm:x:4:\ntty:x:5:\ndisk:x:6:\nlp:x:7:\nmem:x:8:\nkmem:x:9:\nwheel:x:10:\nfloppy:x:11:\nmail:x:12:\nuucp:x:14:\nman:x:15:\naudio:x:18:\ncdrom:x:19:\ndialout:x:20:\ntape:x:26:\nvideo:x:27:\ninput:x:97:\nkvm:x:78:\nrender:x:105:\nclock:x:106:\nsgx:x:107:\nusers:x:100:\ndhcpcd:x:200:\ndbus:x:81:\n' > etc/group
-[ -e etc/shells ] || printf '/bin/sh\n/usr/bin/mksh\n/usr/bin/ksh\n' > etc/shells
-[ -e etc/fstab ] || printf '# device  mount  type  options  dump pass\nproc /proc proc defaults 0 0\nsysfs /sys sysfs defaults 0 0\ntmpfs /tmp tmpfs mode=1777 0 0\n' > etc/fstab
-[ -e etc/profile ] || cat > etc/profile <<'P'
-export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
-export EDITOR="sam -d"
-export PAGER=less
-umask 022
-P
-[ -e etc/os-release ] || printf 'NAME=Chamesle\nID=chamesle\nPRETTY_NAME="Chamesle"\n' > etc/os-release
-[ -e etc/mag.conf ] || printf '# read by mag, same syntax as pkgsrc mk.conf\nJOBS=%s\nCFLAGS=-O2 -std=gnu17 -include sys/sysmacros.h\nPKG_OPTIONS.tnftp=ssl\nCONFIGURE_ARGS.libtirpc=--disable-gssapi\nPKG_SYSCONFDIR.libressl=/etc/ssl\nMAKE.libunistring=gmake\nMAKE.sudo=gmake\nCONFIGURE_ARGS.gmp=--disable-assembly --disable-cxx --disable-fat\nPKG_OPTIONS.opendoas=persist\nCONFIGURE_ARGS.doas=--without-pam\n' "$(nproc 2>/dev/null || echo 4)" > etc/mag.conf
-export MAG_ROOT=$PWD MAG_PREFIX=/usr MAG_REPO
-echo "installing: $base"
-mag install $base
-for r in $(echo "$MAG_REPO" | tr : ' '); do
-	[ -f "$r/PROVIDES" ] || continue
-	mkdir -p usr/share/mag/repo
-	cp -R "$r/." usr/share/mag/repo/
-	break
-done
-for t in chamesle-chroot chamesle-disk; do install -m755 "$here/$t" usr/bin/$t; done
-for k in lib/modules/*; do
-	[ -d "$k" ] || continue
-	depmod -b "$PWD" "${k##*/}"
-done
-mkdir -p etc/ssl
-for f in cert.pem openssl.cnf x509v3.cnf; do [ -e etc/ssl/$f ] || cp usr/libressl/share/examples/libressl/$f etc/ssl/ 2>/dev/null; done
-[ -e usr/bin/sh ] || ln -s mksh usr/bin/sh
-[ -e bin/sh ] || ln -s ../usr/bin/sh bin/sh
-echo "done: $target"
+[ -f /etc/mag/repos ] && [ -d /etc/mag/keys ] || { echo "chamesle-bootstrap: /etc/mag/repos and /etc/mag/keys are needed" >&2; exit 1; }
+
+mkdir -p "$target/etc/mag" "$target/dev" "$target/proc" "$target/sys" "$target/run" "$target/tmp" "$target/boot"
+chmod 1777 "$target/tmp"
+cp /etc/mag/repos "$target/etc/mag/repos"
+cp -R /etc/mag/keys "$target/etc/mag/"
+[ -n "$arch" ] && echo "$arch" > "$target/etc/mag/arch"
+export MAG_ROOT=$target
+mag update
+# the kernel wants some firmware; the vendor packages do not count as that, so -none goes with them
+case $firmware in linux-firmware|linux-firmware-none) ;; *) firmware="linux-firmware-none $firmware";; esac
+mag install chamesle-base $firmware $kernel "$@"
+sed -i "s/^hostname = .*/hostname = $name/" "$target/etc/init.conf"
+echo
+echo "the base is in $target. go on with the fstab, a password and the boot entry (handbook, 3.4)."
