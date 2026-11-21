@@ -15,7 +15,7 @@
       },
       {
         Command = "st";
-        Name = st-256color.st-256color;
+        Name = "st-256color.st-256color";
         AutoLaunch = No;
         Forced = No;
         BuggyApplication = No;

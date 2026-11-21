@@ -4,7 +4,7 @@
 # there first goes to *.before); in between they are yours to change in WPrefs. SLATE_RESET=1 puts them back.
 # ~/GNUstep names no path, so one home runs it from /usr and from /usr/local: "slate autostart", "web" and "exit"
 s=${SLATE_SHARE:-$(dirname "$(dirname "$(readlink -f "$0")")")/share/slate}
-v=3
+v=4
 case $1 in autostart|web|exit) f=$s/$1; shift; exec "$f" "$@";; esac
 g=$HOME/GNUstep
 export XDG_CURRENT_DESKTOP=WindowMaker XDG_SESSION_DESKTOP=WindowMaker
