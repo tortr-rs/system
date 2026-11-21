@@ -1,0 +1,13 @@
+#!/bin/sh
+# install [PREFIX]: puts the desktop in PREFIX (/usr/local), with DESTDIR in front if it is set
+set -e
+cd "$(dirname "$0")"
+p=$DESTDIR${1:-/usr/local}
+s=$p/share/chamesle/windowmaker
+mkdir -p "$p/bin" "$s"
+install -m755 bin/chamesle-windowmaker "$p/bin/"
+for f in WindowMaker WMState WMRootMenu WMWindowAttributes; do install -m644 "share/$f" "$s/"; done
+install -m755 share/autostart share/web "$s/"
+x=$DESTDIR/usr/share/xsessions
+mkdir -p "$x"
+printf '[Desktop Entry]\nName=Window Maker (Chamesle)\nComment=Window Maker with the dock apps, the NeXT look\nExec=%s/bin/chamesle-windowmaker\nType=Application\n' "${1:-/usr/local}" > "$x/chamesle-windowmaker.desktop"

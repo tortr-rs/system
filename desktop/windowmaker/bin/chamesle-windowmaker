@@ -1,0 +1,20 @@
+#!/bin/sh
+# the Window Maker desktop: startx chamesle-windowmaker, or pick it in a display manager.
+# the first time it puts its look, dock and menu in ~/GNUstep (what was there goes to *.before), after that
+# they are yours to change in WPrefs. CHAMESLE_WM_RESET=1 puts them back
+s=${CHAMESLE_WM_SHARE:-$(dirname "$(dirname "$(readlink -f "$0")")")/share/chamesle/windowmaker}
+g=$HOME/GNUstep
+export XDG_CURRENT_DESKTOP=WindowMaker XDG_SESSION_DESKTOP=WindowMaker
+if [ ! -e "$g/.chamesle-windowmaker" ] || [ -n "$CHAMESLE_WM_RESET" ]; then
+	mkdir -p "$g/Defaults" "$g/Library/WindowMaker"
+	for f in WindowMaker WMState WMRootMenu WMWindowAttributes; do
+		[ -e "$g/Defaults/$f" ] && [ ! -e "$g/Defaults/$f.before" ] && mv "$g/Defaults/$f" "$g/Defaults/$f.before"
+		sed "s|@SHARE@|$s|g" "$s/$f" > "$g/Defaults/$f"
+	done
+	a=$g/Library/WindowMaker/autostart
+	[ -e "$a" ] && [ ! -e "$a.before" ] && mv "$a" "$a.before"
+	printf '#!/bin/sh\nexec "%s/autostart"\n' "$s" > "$a"
+	chmod 755 "$a"
+	touch "$g/.chamesle-windowmaker"
+fi
+exec wmaker "$@"

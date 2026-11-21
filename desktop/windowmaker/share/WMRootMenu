@@ -1,0 +1,29 @@
+(
+  "Chamesle",
+  ("Terminal", SHORTCUT, "Mod4+Return", EXEC, xterm),
+  ("Files", SHORTCUT, "Mod4+E", EXEC, xfe),
+  ("Web", SHORTCUT, "Mod4+W", EXEC, "@SHARE@/web"),
+  ("Applications", OPEN_PLMENU, "|| wmmenugen -parser:xdg /usr/share/applications /usr/local/share/applications"),
+  ("Run...", SHORTCUT, "Mod4+R", SHEXEC, "%A(Run,Type a command:)"),
+  (
+    "Workspaces",
+    WORKSPACE_MENU
+  ),
+  (
+    "Appearance",
+    ("Themes", OPEN_MENU, "-noext /usr/share/WindowMaker/Themes $HOME/GNUstep/Library/WindowMaker/Themes WITH setstyle"),
+    ("Styles", OPEN_MENU, "-noext /usr/share/WindowMaker/Styles $HOME/GNUstep/Library/WindowMaker/Styles WITH setstyle"),
+    ("Backgrounds", OPEN_MENU, "-noext /usr/share/WindowMaker/Backgrounds $HOME/GNUstep/Library/WindowMaker/Backgrounds WITH wmsetbg -u -t"),
+    ("Preferences", EXEC, WPrefs)
+  ),
+  (
+    "Session",
+    ("Hide Others", HIDE_OTHERS),
+    ("Show All", SHOW_ALL),
+    ("Arrange Icons", ARRANGE_ICONS),
+    ("Refresh", REFRESH),
+    ("Lock", EXEC, "xscreensaver-command -lock || xlock"),
+    ("Restart", RESTART),
+    ("Log Out", SHORTCUT, "Mod4+Shift+Q", EXIT)
+  )
+)

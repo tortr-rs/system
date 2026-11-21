@@ -1,0 +1,135 @@
+{
+  Dock = {
+    AutoRaiseLower = No;
+    Applications = (
+      {
+        Command = "WPrefs";
+        Name = Logo.WMDock;
+        AutoLaunch = No;
+        Forced = No;
+        BuggyApplication = No;
+        Position = "0,0";
+        Omnipresent = No;
+        DropCommand = "WPrefs %d";
+        Lock = Yes;
+      },
+      {
+        Command = "xterm";
+        Name = xterm.XTerm;
+        AutoLaunch = No;
+        Forced = No;
+        BuggyApplication = No;
+        Position = "0,1";
+        Omnipresent = No;
+        DropCommand = "xterm %d";
+        Lock = Yes;
+      },
+      {
+        Command = "xfe";
+        Name = xfe.Xfe;
+        AutoLaunch = No;
+        Forced = No;
+        BuggyApplication = No;
+        Position = "0,2";
+        Omnipresent = No;
+        DropCommand = "xfe %d";
+        Lock = Yes;
+      },
+      {
+        Command = "@SHARE@/web";
+        Name = Navigator.firefox;
+        AutoLaunch = No;
+        Forced = No;
+        BuggyApplication = No;
+        Position = "0,3";
+        Omnipresent = No;
+        DropCommand = "@SHARE@/web %d";
+        Lock = Yes;
+      },
+      {
+        Command = "wmclock";
+        Name = wmclock.WMClock;
+        AutoLaunch = Yes;
+        Forced = No;
+        BuggyApplication = No;
+        Position = "0,4";
+        Omnipresent = No;
+        DropCommand = "wmclock %d";
+        Lock = Yes;
+      },
+      {
+        Command = "wmcpuload";
+        Name = wmcpuload.DockApp;
+        AutoLaunch = Yes;
+        Forced = No;
+        BuggyApplication = No;
+        Position = "0,5";
+        Omnipresent = No;
+        DropCommand = "wmcpuload %d";
+        Lock = Yes;
+      },
+      {
+        Command = "wmmemload";
+        Name = wmmemload.DockApp;
+        AutoLaunch = Yes;
+        Forced = No;
+        BuggyApplication = No;
+        Position = "0,6";
+        Omnipresent = No;
+        DropCommand = "wmmemload %d";
+        Lock = Yes;
+      },
+      {
+        Command = "wmnet";
+        Name = wmnet.WMNET;
+        AutoLaunch = Yes;
+        Forced = No;
+        BuggyApplication = No;
+        Position = "0,7";
+        Omnipresent = No;
+        DropCommand = "wmnet %d";
+        Lock = Yes;
+      },
+      {
+        Command = "wmix";
+        Name = wmix.wmix;
+        AutoLaunch = Yes;
+        Forced = No;
+        BuggyApplication = No;
+        Position = "0,8";
+        Omnipresent = No;
+        DropCommand = "wmix %d";
+        Lock = Yes;
+      },
+      {
+        Command = "wmbattery";
+        Name = wmbattery.wmbattery;
+        AutoLaunch = Yes;
+        Forced = No;
+        BuggyApplication = No;
+        Position = "0,9";
+        Omnipresent = No;
+        DropCommand = "wmbattery %d";
+        Lock = Yes;
+      },
+      {
+        Command = "wmsystemtray";
+        Name = wmsystemtray0.wmsystemtray;
+        AutoLaunch = Yes;
+        Forced = No;
+        BuggyApplication = No;
+        Position = "0,10";
+        Omnipresent = No;
+        DropCommand = "wmsystemtray %d";
+        Lock = Yes;
+      }
+    );
+    Lowered = Yes;
+  };
+  Workspaces = (
+    {Name = One;},
+    {Name = Two;},
+    {Name = Three;},
+    {Name = Four;}
+  );
+}

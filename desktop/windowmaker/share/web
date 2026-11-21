@@ -1,0 +1,3 @@
+#!/bin/sh
+for b in firefox firefox-bin librewolf chromium; do command -v $b >/dev/null && exec $b "$@"; done
+exec xmessage "no web browser, install firefox"

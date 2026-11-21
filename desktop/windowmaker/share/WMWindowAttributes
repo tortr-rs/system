@@ -1,0 +1,8 @@
+{
+  "*" = {Icon = defaultAppIcon.tiff;};
+  Logo.WMDock = {Icon = GNUstep3D.tiff;};
+  Logo.WMPanel = {Icon = GNUstep.tiff;};
+  XTerm = {Icon = TerminalGNUstep.tiff;};
+  Xfe = {NoAppIcon = No;};
+  DockApp = {NoTitlebar = Yes; NoResizebar = Yes;};
+}

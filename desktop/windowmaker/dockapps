@@ -1,0 +1,29 @@
+#!/bin/sh
+# dockapps SRC OUT: builds the dock apps from the tarballs in SRC into OUT, for a system that has none packaged
+set -e
+src=$(cd "$1" && pwd) out=$2 here=$(cd "$(dirname "$0")" && pwd)
+mkdir -p "$out"
+out=$(cd "$out" && pwd)
+w=$(mktemp -d)
+trap 'rm -rf "$w"' EXIT
+export CFLAGS="${CFLAGS:--O2 -pipe} -std=gnu17 -fcommon" PKG_CONFIG_PATH="$out/usr/lib/pkgconfig" CPPFLAGS="-I$out/usr/include" LDFLAGS="-L$out/usr/lib"
+gnu() {
+	n=$1
+	shift
+	mkdir "$w/$n" && tar -C "$w/$n" -xf "$src/$n"-*.tar.gz
+	cd "$(dirname "$(find "$w/$n" -name configure.ac -o -name configure.in | sort | head -1)")"
+	re=
+	for p in "$here"/patches/"$n"-*.patch; do [ -f "$p" ] && patch -p1 < "$p" && re=1; done
+	[ -x configure ] && [ -z "$re" ] || autoreconf -fi >/dev/null 2>&1
+	./configure -q --prefix=/usr --sysconfdir=/etc "$@" >/dev/null
+	make -s
+	make -s DESTDIR="$out" install
+}
+gnu libdockapp --disable-static
+for a in wmclock wmcpuload wmmemload wmix wmbattery wmsystemtray; do (gnu $a); done
+cd "$w" && tar -xf "$src"/wmnet-*.tar.gz && cd wmnet-*/
+sed -i '/define USE_LINUX_PPP/d' config.h
+xmkmf >/dev/null 2>&1 || true
+if [ -f Makefile ]; then make -s CDEBUGFLAGS="$CFLAGS"; else ${CC:-cc} $CFLAGS -o wmnet wmnet.c drivers.c -lX11 -lXext; fi
+install -Dm755 wmnet "$out/usr/bin/wmnet"
+rm -rf "$out/usr/lib/pkgconfig" "$out/usr/include" "$out/usr/lib"/*.la "$out/usr/share/doc" "$out/usr/share/fonts/X11/misc/fonts.dir"

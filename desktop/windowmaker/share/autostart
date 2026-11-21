@@ -1,0 +1,11 @@
+#!/bin/sh
+# Window Maker runs this once it is up. the dock starts the dock apps itself
+command -v xsetroot >/dev/null && xsetroot -cursor_name left_ptr
+if ! pgrep -u "$(id -u)" -x pipewire >/dev/null; then
+	if command -v gentoo-pipewire-launcher >/dev/null; then gentoo-pipewire-launcher restart >/dev/null 2>&1 &
+	elif command -v pipewire >/dev/null; then pipewire >/dev/null 2>&1 &
+	fi
+fi
+(sleep 2; command -v nm-applet >/dev/null && exec nm-applet) &
+command -v xscreensaver >/dev/null && xscreensaver -no-splash &
+exit 0
