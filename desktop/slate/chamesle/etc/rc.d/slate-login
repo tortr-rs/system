@@ -1,0 +1,6 @@
+#!/bin/sh
+# the login screen: boot-services = {...,slate-login} in /etc/init.conf
+. /etc/rc.subr
+procname=xdm
+svc_start() { xdm -config /usr/share/slate/xdm/xdm-config; }
+run "$1"

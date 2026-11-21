@@ -1,0 +1,52 @@
+# the panel: the windows of this workspace, along the bottom, out of the dock's way
+panel_items = T
+panel_position = bottom center horizontal
+panel_size = 100% 26
+panel_margin = 0 0
+panel_padding = 2 2 2
+panel_background_id = 1
+panel_layer = top
+wm_menu = 1
+strut_policy = follow_size
+panel_dock = 0
+autohide = 0
+
+rounded = 0
+border_width = 1
+border_sides = T
+border_color = #ffffff 100
+background_color = #aaaaaa 100
+
+rounded = 0
+border_width = 1
+border_sides = TBLR
+border_color = #555555 100
+background_color = #aaaaaa 100
+
+rounded = 0
+border_width = 1
+border_sides = TBLR
+border_color = #000000 100
+background_color = #000000 100
+
+taskbar_mode = single_desktop
+taskbar_padding = 0 0 2
+taskbar_background_id = 0
+taskbar_active_background_id = 0
+task_icon = 1
+task_text = 1
+task_centered = 0
+task_maximum_size = 220 22
+task_padding = 4 2 4
+task_font = Nimbus Sans 9
+task_font_color = #000000 100
+task_active_font_color = #ffffff 100
+task_iconified_font_color = #555555 100
+task_background_id = 2
+task_active_background_id = 3
+task_iconified_background_id = 2
+mouse_left = toggle_iconify
+mouse_middle = none
+mouse_right = close
+mouse_scroll_up = toggle
+mouse_scroll_down = iconify

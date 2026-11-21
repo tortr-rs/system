@@ -1,0 +1,2 @@
+#!/bin/sh
+if command -v xsetroot >/dev/null; then xsetroot -solid "#505075" -cursor_name left_ptr; else wmsetbg -p '(solid, "#505075")'; fi

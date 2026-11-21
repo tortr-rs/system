@@ -7,5 +7,8 @@ if ! pgrep -u "$(id -u)" -x pipewire >/dev/null; then
 	fi
 fi
 (sleep 2; command -v nm-applet >/dev/null && exec nm-applet) &
-command -v xscreensaver >/dev/null && xscreensaver -no-splash &
+s=$(dirname "$(readlink -f "$0")")
+command -v tint2 >/dev/null && tint2 -c "$s/tint2rc" &
+command -v dunst >/dev/null && dunst -config "$s/dunstrc" &
+command -v xscreensaver >/dev/null && xscreensaver --no-splash &
 exit 0

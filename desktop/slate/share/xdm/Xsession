@@ -1,0 +1,9 @@
+#!/bin/sh
+# xdm's session: the login shell's environment, then ~/.xsession if there is one, else slate.
+# a profile that sets its own XAUTHORITY would lose the cookie xdm just made, so that one stays
+x=$XAUTHORITY
+[ -f /etc/profile ] && . /etc/profile
+[ -f "$HOME/.profile" ] && . "$HOME/.profile"
+export XAUTHORITY="$x"
+[ -x "$HOME/.xsession" ] && exec "$HOME/.xsession"
+exec dbus-run-session slate

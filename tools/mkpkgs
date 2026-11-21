@@ -40,8 +40,9 @@ mkapk -n chamesle-base -v "$(date +%Y%m%d)-r${REL:-0}" -d "Winchester, the files
 
 d=$tmp/slate
 DESTDIR=$d "$here/desktop/slate/install" /usr
+cp -Rp "$here/desktop/slate/chamesle/." "$d/"
 mkapk -n slate -v "$(date +%Y%m%d)-r${WMREL:-0}" -d "Window Maker with the dock apps and the NeXT look" \
-	-D "windowmaker st xfe xsetroot font-urw-base35 font-misc-misc${DOCKAPPS:+ chamesle-dockapps}" "$d"
+	-D "windowmaker st xfe xsetroot xmessage xdm tint2 dunst xscreensaver arandr pavucontrol font-urw-base35 font-misc-misc${DOCKAPPS:+ chamesle-dockapps}" "$d"
 if [ -n "$DOCKAPPS" ]; then
 	mkapk -n chamesle-dockapps -v "$(date +%Y%m%d)-r${WMREL:-0}" -d "wmclock, wmcpuload, wmmemload, wmnet, wmix, wmbattery and wmsystemtray" \
 		-D "libx11 libxext libxpm alsa-lib upower" "$DOCKAPPS"

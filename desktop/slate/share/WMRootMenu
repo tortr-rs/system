@@ -10,11 +10,18 @@
     WORKSPACE_MENU
   ),
   (
+    "Preferences",
+    ("Look and Feel", EXEC, WPrefs),
+    ("Screens", EXEC, arandr),
+    ("Sound", EXEC, "pavucontrol || pavucontrol-qt || st -e alsamixer"),
+    ("Network", EXEC, "st -e nmtui"),
+    ("Screen Saver", EXEC, "xscreensaver-settings || xscreensaver-demo")
+  ),
+  (
     "Appearance",
     ("Themes", OPEN_MENU, "-noext /usr/share/WindowMaker/Themes $HOME/GNUstep/Library/WindowMaker/Themes WITH setstyle"),
     ("Styles", OPEN_MENU, "-noext /usr/share/WindowMaker/Styles $HOME/GNUstep/Library/WindowMaker/Styles WITH setstyle"),
-    ("Backgrounds", OPEN_MENU, "-noext /usr/share/WindowMaker/Backgrounds $HOME/GNUstep/Library/WindowMaker/Backgrounds WITH wmsetbg -u -t"),
-    ("Preferences", EXEC, WPrefs)
+    ("Backgrounds", OPEN_MENU, "-noext /usr/share/WindowMaker/Backgrounds $HOME/GNUstep/Library/WindowMaker/Backgrounds WITH wmsetbg -u -t")
   ),
   (
     "Session",
@@ -22,8 +29,8 @@
     ("Show All", SHOW_ALL),
     ("Arrange Icons", ARRANGE_ICONS),
     ("Refresh", REFRESH),
-    ("Lock", EXEC, "xscreensaver-command -lock || xlock"),
-    ("Restart", RESTART),
-    ("Log Out", SHORTCUT, "Mod4+Shift+Q", EXIT)
+    ("Lock", SHORTCUT, "Mod4+L", EXEC, "xscreensaver-command -lock"),
+    ("Restart Window Maker", RESTART),
+    ("Log Out...", SHORTCUT, "Mod4+Shift+Q", EXEC, "slate exit")
   )
 )

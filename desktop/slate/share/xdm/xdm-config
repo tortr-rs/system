@@ -1,0 +1,11 @@
+! the login screen of slate
+DisplayManager.servers: @SHARE@/xdm/Xservers
+DisplayManager.errorLogFile: /var/log/xdm.log
+DisplayManager.pidFile: /run/xdm.pid
+DisplayManager.authDir: /run
+DisplayManager.requestPort: 0
+DisplayManager*resources: @SHARE@/xdm/Xresources
+DisplayManager*setup: @SHARE@/xdm/Xsetup
+DisplayManager*session: @SHARE@/xdm/Xsession
+DisplayManager*authorize: true
+DisplayManager*terminateServer: true

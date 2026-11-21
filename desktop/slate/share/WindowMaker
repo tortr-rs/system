@@ -5,7 +5,7 @@
   NewStyle = next;
   DisableClip = YES;
   DisableDrawers = NO;
-  IconPosition = blh;
+  IconPosition = tlh;
   IconificationStyle = Zoom;
   WorkspaceNameDisplayPosition = none;
   MouseLeftButtonAction = SelectWindows;

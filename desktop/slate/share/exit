@@ -1,0 +1,10 @@
+#!/bin/sh
+a=$(xmessage -center -title Slate -buttons "Log Out,Restart,Shut Down,Cancel" -default Cancel -print "
+   Log out of Slate, restart or shut down the computer?   
+")
+power() { loginctl "$1" 2>/dev/null || doas -n "$1" || xmessage -center "$1 needs root: doas $1"; }
+case $a in
+"Log Out") pkill -TERM -u "$(id -u)" -x wmaker;;
+Restart) power reboot;;
+"Shut Down") power poweroff;;
+esac

@@ -1,0 +1,23 @@
+! the login window: a grey panel on the slate background, as NeXT had it
+xlogin*greeting: CLIENTHOST
+xlogin*unsecureGreeting: CLIENTHOST
+xlogin*namePrompt: Name\040
+xlogin*passwdPrompt: Password\040
+xlogin*fail: That name and password do not match
+xlogin*background: #aaaaaa
+xlogin*foreground: #000000
+xlogin*greetColor: #000000
+xlogin*failColor: #800000
+xlogin*promptColor: #000000
+xlogin*inpColor: #ffffff
+xlogin*hiColor: #ffffff
+xlogin*shdColor: #555555
+xlogin*borderWidth: 1
+xlogin*frameWidth: 2
+xlogin*innerFramesWidth: 1
+xlogin*sepWidth: 1
+xlogin*useShape: false
+xlogin*face: Nimbus Sans-13
+xlogin*greetFace: Nimbus Sans-22:bold
+xlogin*promptFace: Nimbus Sans-13:bold
+xlogin*failFace: Nimbus Sans-13:bold
