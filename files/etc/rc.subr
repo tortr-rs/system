@@ -4,9 +4,11 @@ name=${0##*/}
 
 log() { echo "$name: $*"; }
 
+# the script itself has the name of the daemon when they share it, so the shell running it is left out
 pids() {
+	_sh=$(readlink /proc/$$/exe)
 	for _d in /proc/[0-9]*; do
-		read -r _c 2>/dev/null < $_d/comm && [ "$_c" = "${1:0:15}" ] && echo ${_d#/proc/}
+		read -r _c 2>/dev/null < $_d/comm && [ "$_c" = "${1:0:15}" ] && [ "$(readlink $_d/exe)" != "$_sh" ] && echo ${_d#/proc/}
 	done
 }
 

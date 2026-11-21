@@ -1,5 +1,6 @@
 # what goes into the live image besides chamesle-base and the kernel
 e2fsprogs
+e2fsprogs-extra
 dosfstools
 sfdisk
 lsblk
