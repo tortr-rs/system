@@ -548,9 +548,16 @@ The login shell is mksh and `/etc/profile` is read by login shells. For a prompt
 
     adduser alice
     adduser alice wheel
+    adduser alice video
+    adduser alice input
 
 `adduser` makes the account, the group and the home, and asks for the password; `passwd alice` changes it.
-`deluser alice` takes the account away. For `doas` or `sudo`, `mag install` them and give `wheel` the right in their file.
+`deluser alice` takes the account away.
+
+`wheel` may use `doas`, which is in the base with `permit persist :wheel` in `/etc/doas.d/wheel.conf`. `video` opens
+`/dev/dri`, the graphics, and `input` the keyboard and mouse under `/dev/input`. There is no logind to hand them out, so
+whoever runs X or a Wayland compositor needs both, or Xorg stops with `open /dev/dri/card0: Permission denied` and
+`no screens found`. Groups count from the next login.
 
 ### 6.6 udev and modules
 
