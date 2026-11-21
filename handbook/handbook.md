@@ -372,12 +372,13 @@ same in both systems.
 
 mag is the package manager. It installs binary packages from the repositories in `/etc/mag/repos`, checks every index
 and every package against `/etc/mag/keys`, and keeps what it installed in `/var/lib/mag`. It is one C file and runs
-nothing but the download command.
+nothing but the download command, and bash when it builds from a source tree (4.6, 4.7).
 
 ### 4.1 The commands
 
     mag update                 get the index of every repo
     mag install PKG...         install, with what they need
+    mag build PKG...           build them from a source tree: CRUX, Void or Exherbo (4.6, 4.7)
     mag remove PKG...          take packages off
     mag upgrade                install what the repos have a newer version of
     mag autoremove             remove what was only a dependency and is not needed now
@@ -434,6 +435,56 @@ them:
 
 Put the public half of KEY in `/etc/mag/keys` and the repo's URL in `/etc/mag/repos`. `tools/mkpkgs` is how Chamesle's
 own repo is made.
+
+### 4.6 CRUX ports
+
+mag also builds from CRUX's port trees. A line that starts with `crux` is a tree of ports, and its key goes next to the
+others:
+
+    echo 'crux https://crux.nu/ports/crux-3.8/opt' >> /etc/mag/repos
+    curl -o /etc/mag/keys/opt.pub https://crux.nu/ports/crux-3.8/core/ports/opt.pub
+    mag update
+    mag build foo
+
+`mag update` gets only the ports that changed, as httpup does, into `/var/cache/mag`. Every port's `.signature` is
+checked with the key, then its sources against the signature, and its `build()` runs with bash. `core`, `xorg` and
+`contrib` work the same way, with `core.pub`, `xorg.pub` and `contrib.pub`.
+
+A package the binary repos have wins over a port of the same name: `mag install` takes a port only when nothing has it
+built, `mag build` always takes the port. A port brings build-base, pkgconf and bash with it, and the `-dev` package of
+every dependency that comes built. The flags go in `/etc/mag/build.conf`, otherwise it is `-O2 -pipe` and one job per
+core:
+
+    CFLAGS="-O2 -pipe -march=native"
+    MAKEFLAGS="-j4"
+
+What a port installs is a package like any other: `mag files`, `mag remove` and `mag upgrade` work on it.
+
+### 4.7 Void and Exherbo
+
+mag builds Void's templates and Exherbo's exheres too, from their git trees:
+
+    echo 'void https://github.com/void-linux/void-packages' >> /etc/mag/repos
+    echo 'exherbo https://gitlab.exherbo.org/exherbo/arbor' >> /etc/mag/repos
+    mag update
+    mag build tmux
+
+`mag update` gets the whole tree as one tarball, about 9 MB for Void and 2 MB for arbor, and indexes it. Neither tree
+is signed: what you get is what GitHub or Exherbo's GitLab sent over https. A Void template has the sha256 of each of
+its sources, and mag checks them. An exheres has none, so its sources are as good as the connection they came over.
+
+A Void template runs with the helpers in the tree's `common/`, the way xbps-src runs it: the build style
+(`gnu-configure`, `cmake`, `meson` and the others), `vinstall`, `vmove` and the rest, and Void's patches. What Void
+splits into subpackages stays in one package here: `mag build libzstd` builds zstd. A `-devel` it needs is the `-dev`
+of the binary repos.
+
+An exheres runs on a small exheres-0 of mag's own, with the exlibs of the tree. Options are what Exherbo's profile turns
+on, without systemd and pam. Exherbo puts programs in `/usr/x86_64-...-musl/bin`; mag builds them there and moves them
+to `/usr` afterwards. Arbor is Exherbo's main tree, about 1000 packages; the others are on the same GitLab and work the
+same way.
+
+When two trees have a package, `mag build` takes the newer version. A package the binary repos split differently,
+like xz with its `xz-libs`, clashes with what is installed, and mag stops; `-f` writes over it.
 
 
 ## 5. rifle
@@ -935,7 +986,7 @@ X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
 | `/etc/fstab` | file systems |
 | `/etc/sysctl.d/` | kernel settings loaded at boot (6.10) |
 | `/etc/os-release` | `NAME=Chamesle`, `ID=chamesle` |
-| `/etc/mag/` | `repos`, `keys/`, `arch` |
+| `/etc/mag/` | `repos`, `keys/`, `arch`, `build.conf` |
 | `/etc/mkinitfs/mkinitfs.conf` | what goes into the initramfs |
 | `/boot/limine.conf` | the boot entries |
 | `/boot/limine-bios.sys` | limine's BIOS stage |
@@ -944,7 +995,7 @@ X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
 | `/lib/modules/V/` | its modules |
 | `/lib/firmware/` | firmware |
 | `/var/lib/mag/` | what is installed, and its files |
-| `/var/cache/mag/` | indexes and downloaded packages |
+| `/var/cache/mag/` | indexes, downloaded packages and port trees |
 | `/usr/share/limine/` | limine's boot files, for installing it |
 | `/usr/share/doc/chamesle/handbook.md` | this book |
 
@@ -973,6 +1024,6 @@ X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
     chamesle-chroot DIR [COMMAND...]
     chamesle-disk DISK
     chamesle-boot [DIR]
-    mag [-nf] update|install|remove|upgrade|autoremove|list|info|search|files|owns|deps|rdeps|fetch
+    mag [-nf] update|install|build|remove|upgrade|autoremove|list|info|search|files|owns|deps|rdeps|fetch
     rifle --install DIR | --list
     limine bios-install DEVICE

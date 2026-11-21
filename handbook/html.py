@@ -28,7 +28,7 @@ def page(title, desc, url, body):
 <meta property="og:title" content="{t} - Chamesle">
 <meta property="og:description" content="{d}">
 <meta property="og:url" content="https://chamesle.org/{url}">
-<link rel="stylesheet" href="style.css?19">
+<link rel="stylesheet" href="style.css?20">
 <link rel="icon" href="img/logo.png">
 </head>
 <body>

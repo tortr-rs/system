@@ -1,3 +1,0 @@
-#!/bin/sh
-case " $* " in *" -c "*|*" -E "*|*" -S "*) exec clang "$@";; esac
-exec clang --rtlib=compiler-rt --unwindlib=libunwind -fuse-ld=lld "$@"
