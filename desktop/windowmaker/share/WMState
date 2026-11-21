@@ -36,14 +36,14 @@
         Lock = Yes;
       },
       {
-        Command = "@SHARE@/web";
+        Command = "chamesle-windowmaker web";
         Name = Navigator.firefox;
         AutoLaunch = No;
         Forced = No;
         BuggyApplication = No;
         Position = "0,3";
         Omnipresent = No;
-        DropCommand = "@SHARE@/web %d";
+        DropCommand = "chamesle-windowmaker web %d";
         Lock = Yes;
       },
       {
