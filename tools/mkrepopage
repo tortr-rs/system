@@ -1,0 +1,169 @@
+#!/bin/sh
+# mkrepopage DIR: index.html for the repo in DIR (DIR/x86_64, DIR/x86 and the key), with a list-ARCH.tsv of every
+# package mag can install from the repos in REPOS, for the search on it
+set -e
+[ $# = 1 ] && [ -d "$1/x86_64" ] || { echo "usage: mkrepopage DIR" >&2; exit 2; }
+dir=$1
+here=$(cd "$(dirname "$0")/.." && pwd)
+repos=${REPOS:-$here/pkg/chamesle-base/repos}
+tmp=$(mktemp -d "$dir/.page.XXXXXX")
+trap 'rm -rf "$tmp"' EXIT
+
+esc() { sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g'; }
+
+# idx FILE REPO: name, version, repo, installed size, description and dependencies, a line each
+idx() {
+	tar -xzOf "$1" APKINDEX | awk -v r="$2" -F: '
+		/^P:/ { p = substr($0, 3) } /^V:/ { v = substr($0, 3) } /^I:/ { i = substr($0, 3) }
+		/^T:/ { t = substr($0, 3); gsub(/\t/, " ", t) }
+		/^D:/ { n = split(substr($0, 3), x, " "); d = ""; for (j = 1; j <= n; j++) if (x[j] !~ /^(so|pc|cmd):/) d = d (d == "" ? "" : " ") x[j] }
+		/^$/ { if (p != "") print p "\t" v "\t" r "\t" i "\t" t "\t" d; p = v = i = t = d = "" }
+		END { if (p != "") print p "\t" v "\t" r "\t" i "\t" t "\t" d }'
+}
+
+for a in x86_64 x86; do
+	: > "$tmp/$a"
+	while read -r u; do
+		case $u in ''|'#'*) continue;; esac
+		case $u in
+		*chamesle.org/repo*) f=$dir/$a/APKINDEX.tar.gz r=chamesle;;
+		*) f=$tmp/$a.idx r=${u##*/}; curl -fsSL "$u/$a/APKINDEX.tar.gz" -o "$f";;
+		esac
+		idx "$f" "$r" >> "$tmp/$a"
+	done < "$repos"
+	sort -t "$(printf '\t')" -k1,1 -u "$tmp/$a" > "$dir/list-$a.tsv"
+done
+
+own() {
+	tar -xzOf "$dir/$1/APKINDEX.tar.gz" APKINDEX | awk -F: '
+		/^P:/ { p = substr($0, 3) } /^V:/ { v = substr($0, 3) } /^S:/ { s = substr($0, 3) }
+		/^I:/ { i = substr($0, 3) } /^T:/ { t = substr($0, 3) } /^D:/ { d = substr($0, 3) }
+		/^$/ { if (p != "") print p "|" v "|" s "|" i "|" t "|" d; p = v = s = i = t = d = "" }
+		END { if (p != "") print p "|" v "|" s "|" i "|" t "|" d }' |
+	while IFS='|' read -r p v s i t d; do
+		f=$p-$v.apk
+		sum=$(sha256sum "$dir/$1/$f" | cut -c1-64)
+		deps=
+		for x in $d; do deps="$deps <a href=\"#$x\">$x</a>"; done
+		printf '<tr><td><b>%s</b><br>%s</td><td>%s</td><td>%s K<br>%s K installed</td><td><a href="%s/%s">%s</a><br><code class="sum">%s</code></td></tr>\n' \
+			"$p" "$v" "$(printf '%s' "$t" | esc)${deps:+<br><small>needs$deps</small>}" "$1" "$((s / 1024))" "$((i / 1024))" "$1" "$f" "$f" "$sum"
+	done
+}
+
+key=$(ls "$dir"/*.rsa.pub | head -1)
+fp=$(openssl pkey -pubin -in "$key" -outform DER | sha256sum | cut -c1-64)
+now=$(date +%Y-%m-%d)
+n64=$(wc -l < "$dir/list-x86_64.tsv")
+
+cat > "$dir/index.html" <<H
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Repo - Chamesle</title>
+<meta name="description" content="Chamesle's package repo, and a search over every package mag can install.">
+<link rel="canonical" href="https://chamesle.org/repo/">
+<link rel="stylesheet" href="../style.css?19">
+<link rel="icon" href="../img/logo.png">
+<style>
+#q { width: 100%; box-sizing: border-box; font: inherit; padding: 4px; }
+#hits td, .own td { vertical-align: top; }
+.sum { font-size: 11px; word-break: break-all; }
+.pkg { margin: 12px 0; padding: 8px; border: 1px solid #888; }
+.pkg pre { margin: 6px 0 0; }
+</style>
+</head>
+<body>
+
+<div id="page">
+
+<div id="top">
+<h1><a href="../"><img src="../img/banner-dark.png" alt="Chamesle Linux" width="223" height="56"></a></h1>
+</div>
+
+<div id="nav">
+<a href="../">Home</a> |
+<a href="../download.html">Download</a> |
+<a href="../docs.html">Handbook</a> |
+<a href="../packages.html">Packages</a> |
+<b>Repo</b> |
+<a href="../new.html">News</a> |
+<a href="../board.html">Board</a> |
+<a href="../source.html">Source</a> |
+<a href="../about.html">About</a>
+</div>
+
+<main>
+<h2>The repo</h2>
+<p><code>https://chamesle.org/repo</code> has Chamesle's own packages, for <code>x86_64</code> and <code>x86</code>.
+mag reads it next to the musl repo with everything else; both are in <code>/etc/mag/repos</code> of every install.
+The index and every package are signed with <a href="$(basename "$key")">$(basename "$key")</a>, whose key has the
+SHA-256 <code class="sum">$fp</code></p>
+<pre>https://chamesle.org/repo
+cp $(basename "$key") /etc/mag/keys/</pre>
+
+<h2>Search</h2>
+<p>Every package mag can install, $n64 of them for x86_64. <label><input type="radio" name="arch" value="x86_64" checked> x86_64</label>
+<label><input type="radio" name="arch" value="x86"> x86</label></p>
+<input id="q" type="search" placeholder="a name or a word, like tmux or irc" autocomplete="off">
+<div id="pkg"></div>
+<table id="hits"></table>
+
+<h2>Chamesle's packages</h2>
+<h3>x86_64</h3>
+<table class="own">
+$(own x86_64)
+</table>
+<h3>x86</h3>
+<table class="own">
+$(own x86)
+</table>
+</main>
+
+<hr>
+<div id="foot">
+Made by <code>mkrepopage</code> from <a href="https://github.com/tortr-rs/system">system</a> on $now.
+</div>
+
+</div>
+
+<script>
+var lists = {}, arch = 'x86_64', q = document.getElementById('q'), hits = document.getElementById('hits'), one = document.getElementById('pkg');
+function e(s) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+function load(a, then) {
+	if (lists[a]) return then();
+	fetch('list-' + a + '.tsv').then(function (r) { return r.text(); }).then(function (t) {
+		var m = {}, l = t.split('\\n').filter(Boolean).map(function (x) { var f = x.split('\\t'); m[f[0]] = f; return f; });
+		lists[a] = { all: l, by: m }; then();
+	});
+}
+function find() {
+	var w = q.value.trim().toLowerCase(), l = lists[arch].all, out = [];
+	if (w.length < 2) { hits.innerHTML = ''; return; }
+	l.forEach(function (f) {
+		var n = f[0].toLowerCase(), r = n == w ? 0 : n.indexOf(w) == 0 ? 1 : n.indexOf(w) > 0 ? 2 : f[4].toLowerCase().indexOf(w) >= 0 ? 3 : -1;
+		if (r >= 0) out.push([r, f]);
+	});
+	out.sort(function (a, b) { return a[0] - b[0] || a[1][0].localeCompare(b[1][0]); });
+	hits.innerHTML = out.slice(0, 100).map(function (x) {
+		var f = x[1];
+		return '<tr><td><a href="#' + e(f[0]) + '">' + e(f[0]) + '</a></td><td>' + e(f[1]) + '</td><td>' + e(f[4]) + '</td></tr>';
+	}).join('') + (out.length > 100 ? '<tr><td colspan="3"><i>' + (out.length - 100) + ' more, say more</i></td></tr>' : '');
+}
+function show() {
+	var n = decodeURIComponent(location.hash.slice(1)), f = lists[arch] && lists[arch].by[n];
+	if (!n) { one.innerHTML = ''; return; }
+	if (!f) { one.innerHTML = '<div class="pkg">no <b>' + e(n) + '</b> for ' + arch + '</div>'; return; }
+	var d = f[5] ? f[5].split(' ').map(function (x) { var b = x.replace(/[<>=~].*/, '').replace(/^so:|^cmd:|^pc:/, ''); return lists[arch].by[b] ? '<a href="#' + e(b) + '">' + e(x) + '</a>' : e(x); }).join(' ') : 'nothing';
+	one.innerHTML = '<div class="pkg"><b>' + e(f[0]) + '</b> ' + e(f[1]) + ', from ' + e(f[2]) + ', ' + Math.round(f[3] / 1024) + ' K installed<br>' + e(f[4]) + '<br><small>needs ' + d + '</small><pre>mag install ' + e(f[0]) + '</pre></div>';
+}
+document.querySelectorAll('input[name=arch]').forEach(function (r) { r.onchange = function () { arch = r.value; load(arch, function () { find(); show(); }); }; });
+q.oninput = find;
+window.onhashchange = show;
+load(arch, function () { find(); show(); });
+</script>
+</body>
+</html>
+H
+echo "$dir/index.html: $n64 packages for x86_64"
