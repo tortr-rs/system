@@ -24,7 +24,7 @@ The parts:
 
 | part   | what it is |
 |--------|------------|
-| kernel | a prebuilt Linux 6.18 LTS kernel with its modules |
+| kernel | a prebuilt Linux LTS kernel with its modules |
 | musl   | the C library |
 | mag    | the package manager, binary packages only, in one C file |
 | rifle  | the coreutils, all in one C file; `cat`, `ls`, `cp` and the rest are links to one program |
@@ -46,7 +46,25 @@ mag reads two kinds of repository, both signed:
 
 Both are in `/etc/mag/repos`. A package is checked against the keys in `/etc/mag/keys` before anything of it is unpacked.
 
-### 1.3 The layout of the system
+### 1.3 The glibc Chamesle
+
+There is a second Chamesle on glibc, for what musl cannot run: NVIDIA's driver, Steam, programs that only come built for
+glibc. It is the same idea on other packages. mag, rifle, the tools and OpenRC are the same; the packages are Artix's
+and Arch's, about 25,000, and anything else comes from the AUR, built here. `chamesle-install` asks which one you want,
+`chamesle-bootstrap -l glibc` makes it by hand (3.12).
+
+| part   | musl Chamesle | glibc Chamesle |
+|--------|---------------|----------------|
+| kernel | Linux LTS | Linux, latest (`linux-lts` and `linux-zen` are there too) |
+| initramfs | mkinitfs | mkinitcpio |
+| file systems | ZFS, btrfs, ext4 | btrfs, ext4 |
+| login shell | mksh | bash |
+| packages | ~28,000 | ~25,000, and the AUR |
+
+On glibc, coreutils owns `/usr/bin/ls` and the rest, so rifle's links are in `/usr/lib/rifle/bin`, which a login shell
+puts first in PATH (`/etc/profile.d/rifle.sh`).
+
+### 1.4 The layout of the system
 
     /bin /sbin /lib     /lib holds the musl loader and the firmware
     /usr/bin /usr/sbin  programs, /usr/lib libraries, /usr/share data
@@ -59,7 +77,7 @@ Both are in `/etc/mag/repos`. A package is checked against the keys in `/etc/mag
     /var/cache/mag      downloaded indexes and packages
     /run /tmp           tmpfs, made new at every boot
 
-### 1.4 Where the sources are
+### 1.5 Where the sources are
 
 | directory | what is in it |
 |-----------|---------------|
@@ -271,7 +289,7 @@ writes nothing and prints an entry for the GRUB of the system already on the mac
 What it does by hand follows; skip to 3.8 if it said nothing went wrong.
 
     ls /mnt/boot
-    System.map-6.18.64-0-lts  config-6.18.64-0-lts  initramfs-lts  vmlinuz-lts
+    System.map-7.3.5-0-lts  config-7.3.5-0-lts  initramfs-lts  vmlinuz-lts
 
 The names stay the same when the kernel is updated, so `limine.conf` is written once. `/mnt/boot/limine.conf`, with
 the UUID of the root partition:
@@ -383,6 +401,28 @@ and make your user with the same name, user number and group number as there (`i
 `-H` makes no home, since the other system's is used: the files, the dotfiles and the settings of the programs are the
 same in both systems.
 
+### 3.12 The glibc Chamesle
+
+The install is the same, with `-l glibc` for chamesle-bootstrap. ZFS is not there: neither Artix nor Arch carries it, so
+the root is btrfs or ext4.
+
+    chamesle-disk -t btrfs -y /dev/sda
+    chamesle-bootstrap -l glibc -n box -f "linux-firmware-intel linux-firmware-realtek" /mnt networkmanager networkmanager-openrc
+
+The repos and keyrings come from `/usr/share/chamesle/glibc` on the live system. `-k` is the kernel (`linux`, or
+`linux-lts`, `linux-zen`); `-f` the firmware, split by vendor as in Arch (`linux-firmware-amdgpu`, `-nvidia`,
+`-atheros`, `-broadcom`, `-mediatek`, or `linux-firmware` for all of it). For an NVIDIA card, add `nvidia-open
+nvidia-utils`. Users are made with `useradd`, services have their names from Artix (`NetworkManager`, `iwd`):
+
+    echo root:PASSWORD | arch-chroot /mnt chpasswd
+    arch-chroot /mnt useradd -m -G wheel,video,input,audio alice
+    arch-chroot /mnt passwd alice
+    arch-chroot /mnt rc-update del dhcpcd default
+    arch-chroot /mnt rc-update add NetworkManager default
+    chamesle-boot /mnt
+
+chamesle-boot sees the glibc system and writes the entries for mkinitcpio's `initramfs-linux.img`.
+
 
 ## 4. mag
 
@@ -435,8 +475,8 @@ A name can also be what a package provides: `mag install cmd:htop` installs the 
 ### 4.4 Repositories
 
     https://chamesle.org/repo
-    https://dl-cdn.alpinelinux.org/alpine/v3.24/main
-    https://dl-cdn.alpinelinux.org/alpine/v3.24/community
+    https://dl-cdn.alpinelinux.org/alpine/edge/main
+    https://dl-cdn.alpinelinux.org/alpine/edge/community
 
 Each line is the URL above the directory of the architecture: mag adds `/x86_64/APKINDEX.tar.gz`. A repository you
 add needs its key in `/etc/mag/keys`. `mag update` after any change.
@@ -501,6 +541,40 @@ same way.
 
 When two trees have a package, `mag build` takes the newer version. A package the binary repos split differently,
 like xz with its `xz-libs`, clashes with what is installed, and mag stops; `-f` writes over it.
+
+### 4.8 pacman repos and the AUR
+
+The glibc Chamesle (1.3) runs on pacman repos, which mag reads natively. Its `/etc/mag/repos`:
+
+    https://chamesle.org/repo/glibc
+    pacman https://mirrors.dotsrc.org/artix-linux/repos/system/os
+    pacman https://mirrors.dotsrc.org/artix-linux/repos/world/os
+    pacman https://mirrors.dotsrc.org/artix-linux/repos/galaxy/os
+    pacman https://mirrors.dotsrc.org/artix-linux/repos/lib32/os
+    pacman https://geo.mirror.pkgbuild.com/extra/os
+    pacman https://geo.mirror.pkgbuild.com/multilib/os
+    aur https://aur.archlinux.org
+
+A `pacman` line is the URL above the architecture's directory; the database is named after the last part before `os`
+(`system.db`). As in pacman, a package that two repos have comes from the first one, so Artix's OpenRC builds win over
+Arch's systemd ones. Any other mirror of the same repos works the same.
+
+Packages are checked against their sha256 in the database and their OpenPGP signature, with the keyrings of
+`artix-keyring` and `archlinux-keyring` in `/usr/share/pacman/keyrings` (RSA and ed25519, without the revoked keys),
+and any `*.gpg` in `/etc/mag/keys`. A package's `.INSTALL` runs as its scripts, and after every run mag runs the hooks
+in `/usr/share/libalpm/hooks` and `/etc/pacman.d/hooks`, the way pacman does: they make the initramfs, the system
+users, the linker cache and the other caches. mag decompresses zstd itself.
+
+The `aur` line makes the AUR one more repo. `mag update` gets the metadata of every AUR package (15 MB), and
+`mag install` builds what is not in the binary repos:
+
+    mag install spotify
+
+mag installs `base-devel`, `git` and what the PKGBUILD needs to build, gets the snapshot into
+`/var/cache/mag/aur/NAME`, and runs makepkg there as nobody; the package it makes is installed like any other. Keys
+the PKGBUILD lists in `validpgpkeys` are fetched from keyserver.ubuntu.com for the build. A PKGBUILD is written by
+whoever uploaded it and nobody else read it: look at it first (`/var/cache/mag/aur/NAME/PKGBUILD` stays after the build)
+if you do not trust the package.
 
 
 ## 5. rifle
@@ -708,7 +782,7 @@ addresses. To change one, put it in a file of your own that sorts later, `/etc/s
 
 ### 7.1 The kernel package
 
-Nobody builds a kernel in Chamesle. `linux-lts` is a Linux 6.18 LTS kernel with a generic configuration that runs on
+Nobody builds a kernel in Chamesle. `linux-lts` is the newest Linux LTS kernel with a generic configuration that runs on
 most machines, and it installs
 
     /boot/vmlinuz-lts

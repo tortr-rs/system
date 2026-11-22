@@ -1,19 +1,23 @@
 #!/bin/sh
 # chamesle-bootstrap TARGET [PACKAGE]...: puts the Chamesle base into TARGET with mag, like debootstrap does for Debian.
 # the repos and the keys are this system's, from /etc/mag. the base is chamesle-base, a kernel and what they need.
+# -l glibc makes the glibc Chamesle instead, on Artix and Arch packages and the AUR, from /usr/share/chamesle/glibc.
 #   chamesle-bootstrap /mnt
 #   chamesle-bootstrap -a x86 -n box /mnt vim
+#   chamesle-bootstrap -l glibc -f "linux-firmware-intel linux-firmware-realtek" /mnt
 set -e
 usage() {
-	echo "usage: chamesle-bootstrap [-a ARCH] [-n HOSTNAME] [-k KERNEL] [-f FIRMWARE] TARGET [PACKAGE]..." >&2
+	echo "usage: chamesle-bootstrap [-l musl|glibc] [-a ARCH] [-n HOSTNAME] [-k KERNEL] [-f FIRMWARE] TARGET [PACKAGE]..." >&2
+	echo "  -l  musl (default) or glibc" >&2
 	echo "  -a  x86_64, x86 and so on (default: this machine's)" >&2
 	echo "  -n  host name of the new system (default chamesle)" >&2
-	echo "  -k  the kernel package (default linux-lts), -f its firmware (default linux-firmware-none)" >&2
+	echo "  -k  the kernel package (default linux-lts, linux on glibc), -f its firmware (default linux-firmware-none, none on glibc)" >&2
 	exit 2
 }
-arch= name=chamesle kernel=linux-lts firmware=linux-firmware-none
-while getopts a:n:k:f: o; do
+arch= name=chamesle kernel= firmware= libc=musl
+while getopts l:a:n:k:f: o; do
 	case $o in
+	l) libc=$OPTARG;;
 	a) arch=$OPTARG;;
 	n) name=$OPTARG;;
 	k) kernel=$OPTARG;;
@@ -27,18 +31,33 @@ target=$1
 shift
 [ "$(id -u)" = 0 ] || { echo "chamesle-bootstrap: run it as root" >&2; exit 1; }
 command -v mag >/dev/null || { echo "chamesle-bootstrap: mag is not in PATH" >&2; exit 1; }
-[ -f /etc/mag/repos ] && [ -d /etc/mag/keys ] || { echo "chamesle-bootstrap: /etc/mag/repos and /etc/mag/keys are needed" >&2; exit 1; }
+case $libc in
+musl) conf=/etc/mag;;
+glibc) conf=/usr/share/chamesle/glibc; arch=x86_64;;
+*) usage;;
+esac
+[ -f $conf/repos ] && [ -d $conf/keys ] || { echo "chamesle-bootstrap: $conf/repos and $conf/keys are needed" >&2; exit 1; }
 
 mkdir -p "$target/etc/mag" "$target/dev" "$target/proc" "$target/sys" "$target/run" "$target/tmp" "$target/boot"
 chmod 1777 "$target/tmp"
-cp /etc/mag/repos "$target/etc/mag/repos"
-cp -R /etc/mag/keys "$target/etc/mag/"
+cp $conf/repos "$target/etc/mag/repos"
+cp -R $conf/keys "$target/etc/mag/"
 [ -n "$arch" ] && echo "$arch" > "$target/etc/mag/arch"
 export MAG_ROOT=$target
 mag update
-# the kernel wants some firmware; the vendor packages do not count as that, so -none goes with them
-case $firmware in linux-firmware|linux-firmware-none) ;; *) firmware="linux-firmware-none $firmware";; esac
-mag install chamesle-base $firmware $kernel "$@"
+if [ $libc = glibc ]; then
+	# pacman's hooks (the initramfs, the users, tmpfiles) want /proc, /sys and /dev in there, as pacstrap gives them
+	for m in proc sys dev run; do mount --rbind /$m "$target/$m" && mount --make-rslave "$target/$m"; done
+	trap 'for m in run dev sys proc; do umount -R "$target/$m" 2>/dev/null; done' EXIT
+	mag install chamesle-base ${kernel:-linux} $firmware "$@"
+	rm -f "$target"/etc/mag/keys/*.gpg
+	# Artix's localmount would mount a second /sys over the cgroups: proc and sys are its services' to mount
+	[ -f "$target/etc/fstab" ] && sed -i '/^proc[[:space:]]/d; /^sysfs[[:space:]]/d' "$target/etc/fstab"
+else
+	# the kernel wants some firmware; the vendor packages do not count as that, so -none goes with them
+	case ${firmware:=linux-firmware-none} in linux-firmware|linux-firmware-none) ;; *) firmware="linux-firmware-none $firmware";; esac
+	mag install chamesle-base $firmware ${kernel:-linux-lts} "$@"
+fi
 echo "$name" > "$target/etc/hostname"
 [ -e "$target/etc/resolv.conf" ] || cp /etc/resolv.conf "$target/etc/" 2>/dev/null || :
 echo

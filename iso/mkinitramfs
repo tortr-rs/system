@@ -21,6 +21,8 @@ inroot() {
 	done
 	echo "$f"
 }
+# a readelf that does not run copies no libraries, and an init that cannot mount /proc
+"$rd" -h "$(inroot "$root/bin/busybox")" >/dev/null 2>&1 || { echo "mkinitramfs: $rd does not work" >&2; exit 1; }
 # copy what a binary links against: the musl loader and every NEEDED library found in the root
 needed() {
 	$rd -d "$1" | sed -n 's/.*(NEEDED).*\[\(.*\)\]/\1/p' | while read -r l; do

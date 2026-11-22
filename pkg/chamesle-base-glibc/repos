@@ -1,0 +1,8 @@
+https://chamesle.org/repo/glibc
+pacman https://mirrors.dotsrc.org/artix-linux/repos/system/os
+pacman https://mirrors.dotsrc.org/artix-linux/repos/world/os
+pacman https://mirrors.dotsrc.org/artix-linux/repos/galaxy/os
+pacman https://mirrors.dotsrc.org/artix-linux/repos/lib32/os
+pacman https://geo.mirror.pkgbuild.com/extra/os
+pacman https://geo.mirror.pkgbuild.com/multilib/os
+aur https://aur.archlinux.org

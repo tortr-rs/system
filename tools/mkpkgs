@@ -2,7 +2,10 @@
 # mkpkgs ARCH OUT: Chamesle's own packages for one arch, signed with KEY, and the index of OUT.
 #   KEY=~/.chamesle-keys/chamesle-20261118.rsa MAG=~/src/mag/mag RIFLE=~/src/rifle/rifle mkpkgs x86_64 repo/x86_64
 # RIFLE is left out where rifle does not build (it is x86_64 only for now). REL is the -rN of the base's version.
-# WMREL makes slate too, with that -rN; DOCKAPPS is what desktop/slate/dockapps built for this arch, for chamesle-dockapps
+# WMREL makes slate too, with that -rN; DOCKAPPS is what desktop/slate/dockapps built for this arch, for chamesle-dockapps.
+# LIBC=glibc makes the packages of the glibc Chamesle instead, for repo/glibc. KEYRINGS is a directory with artix.gpg and
+# archlinux.gpg (from a root where mag installed artix-keyring and archlinux-keyring): the base gets them so its
+# chamesle-bootstrap can make a glibc system
 set -e
 here=$(cd "$(dirname "$0")/.." && pwd)
 [ $# = 2 ] && [ -f "$KEY" ] && [ -x "$MAG" ] || { echo "usage: KEY=... MAG=... [RIFLE=...] mkpkgs ARCH OUT" >&2; exit 2; }
@@ -15,6 +18,43 @@ mkapk() { "$here/tools/mkapk" -k "$KEY" -a "$arch" -o "$out" "$@"; }
 mkdir -p "$tmp/mag/usr/bin"
 install -m755 "$MAG" "$tmp/mag/usr/bin/mag"
 mkapk -n mag -v "$("$MAG" --version | cut -d' ' -f2)" -d "the package manager" -s "$here/pkg/mag" -t /etc/init.d "$tmp/mag"
+
+# the files every base has: the tools, the handbook, what makes a glibc system
+common() {
+	mkdir -p "$1/etc/mag/keys" "$1/usr/bin" "$1/usr/share/doc/chamesle" "$1/usr/share/chamesle"
+	cp "$here/keys/"*.pub "$1/etc/mag/keys/"
+	cp "$here/pkg/chamesle-base/os-release" "$1/etc/"
+	for t in chamesle-bootstrap chamesle-disk chamesle-boot chamesle-install; do install -m755 "$here/tools/$t" "$1/usr/bin/$t"; done
+	cp "$here/handbook/handbook.md" "$1/usr/share/doc/chamesle/handbook.md"
+	cp "$here/files/usr/share/chamesle/logo.txt" "$1/usr/share/chamesle/"
+	if [ -n "$KEYRINGS" ]; then
+		mkdir -p "$1/usr/share/chamesle/glibc/keys"
+		cp "$here/pkg/chamesle-base-glibc/repos" "$1/usr/share/chamesle/glibc/"
+		cp "$here/keys/"*.pub "$KEYRINGS/artix.gpg" "$KEYRINGS/archlinux.gpg" "$1/usr/share/chamesle/glibc/keys/"
+	fi
+}
+
+if [ "$LIBC" = glibc ]; then
+	[ -n "$RIFLE" ] && [ -n "$KEYRINGS" ] || { echo "mkpkgs: LIBC=glibc needs RIFLE and KEYRINGS" >&2; exit 2; }
+	r=$tmp/rifle
+	mkdir -p "$r/usr/bin" "$r/usr/lib/rifle/bin" "$r/etc/profile.d"
+	install -m755 "$RIFLE" "$r/usr/bin/rifle"
+	for t in $("$RIFLE" --list); do ln -s ../../../bin/rifle "$r/usr/lib/rifle/bin/$t"; done
+	cp "$here/pkg/chamesle-base-glibc/rifle.sh" "$r/etc/profile.d/"
+	mkapk -n rifle -v "$("$RIFLE" --version | head -n 1 | cut -d' ' -f2)" -d "the coreutils, in one program" "$r"
+	b=$tmp/base
+	common "$b"
+	cp "$here/pkg/chamesle-base-glibc/repos" "$b/etc/mag/repos"
+	cp "$here/files/etc/xdg/fastfetch/config.jsonc" "$b/usr/share/chamesle/" 2>/dev/null || :
+	mkdir -p "$b/etc/sysctl.d" "$b/var/lib/pacman/local"
+	cp "$here/files/etc/sysctl.d/10-chamesle.conf" "$b/etc/sysctl.d/"
+	echo 9 > "$b/var/lib/pacman/local/ALPM_DB_VERSION"
+	mkapk -n chamesle-base -v "$(date +%Y%m%d)-r${REL:-0}" -d "the files in /etc and the tools of Chamesle, on glibc" \
+		-D "base openrc elogind-openrc mkinitcpio dhcpcd dhcpcd-openrc opendoas arch-install-scripts artix-keyring archlinux-keyring e2fsprogs dosfstools curl mag rifle" \
+		-s "$here/pkg/chamesle-base-glibc" "$b"
+	"$here/tools/mkrepo" "$out" "$KEY"
+	exit 0
+fi
 
 mkdir -p "$tmp/init"
 mkapk -n chamesle-init -v 1 -d "moves a base from before r20 over to OpenRC" -s "$here/pkg/chamesle-init" "$tmp/init"
@@ -31,13 +71,11 @@ fi
 b=$tmp/base
 cp -R "$here/files" "$b"
 rm -f "$b/etc/hosts" "$b/etc/services"
-mkdir -p "$b/etc/mag/keys" "$b/etc/apk" "$b/usr/bin" "$b/usr/share/doc/chamesle"
-cp "$here/keys/"*.pub "$b/etc/mag/keys/"
+common "$b"
+mkdir -p "$b/etc/apk"
 ln -s ../mag/keys "$b/etc/apk/keys"
 cp "$here/pkg/chamesle-base/repos" "$b/etc/mag/repos"
-cp "$here/pkg/chamesle-base/os-release" "$here/pkg/chamesle-base/issue" "$b/etc/"
-for t in chamesle-bootstrap chamesle-disk chamesle-boot chamesle-install; do install -m755 "$here/tools/$t" "$b/usr/bin/$t"; done
-cp "$here/handbook/handbook.md" "$b/usr/share/doc/chamesle/handbook.md"
+cp "$here/pkg/chamesle-base/issue" "$b/etc/"
 mkapk -n chamesle-base -v "$(date +%Y%m%d)-r${REL:-0}" -d "the files in /etc and the tools of Chamesle" \
 	-D "$deps" -s "$here/pkg/chamesle-base" "$b"
 

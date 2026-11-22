@@ -1,0 +1,8 @@
+#!/bin/sh
+cat > /etc/motd <<M
+Chamesle. The handbook is /usr/share/doc/chamesle/handbook.md, mag help says how to get more.
+
+M
+grep -q '^permit persist :wheel' /etc/doas.conf 2>/dev/null || echo 'permit persist :wheel' >> /etc/doas.conf
+chmod 600 /etc/doas.conf
+exit 0

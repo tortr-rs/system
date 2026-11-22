@@ -28,12 +28,21 @@ rootdev=$1 rootfs=$2 rootopts=$3
 set -- $(mnt "$t/boot")
 bootdev=$1 bootfs=$2
 
+# the glibc Chamesle is Artix underneath: mkinitcpio makes initramfs-linux.img, and grub is one package
+glibc=
+[ -e "$t/usr/lib/libc.so.6" ] && glibc=1
 kernels=
 for k in "$t"/boot/vmlinuz-*; do [ -e "$k" ] && kernels="$kernels ${k##*/vmlinuz-}"; done
-[ -n "$kernels" ] || die "no kernel in $t/boot, install linux-lts first"
+[ -n "$kernels" ] || die "no kernel in $t/boot, install a kernel first (linux-lts, or linux on glibc)"
+img() { [ -e "$t/boot/initramfs-$1.img" ] && echo "initramfs-$1.img" || echo "initramfs-$1"; }
 
 # feature NAME PACKAGE...: puts NAME in the initramfs, with the packages it needs
 feature() {
+	if [ -n "$glibc" ]; then
+		shift
+		arch-chroot "$t" mag install "$@" || die "mag install $* failed"
+		return
+	fi
 	conf=$t/etc/mkinitfs/mkinitfs.conf
 	grep -qE "^features=\"([^\"]* )?$1( |\")" "$conf" && return
 	echo "adding $1 to the initramfs"
@@ -44,13 +53,16 @@ feature() {
 	for m in "$t"/lib/modules/*; do arch-chroot "$t" mkinitfs "${m##*/}" || die "mkinitfs failed"; done
 }
 
-if [ "$rootfs" = zfs ]; then
+if [ "$rootfs" = zfs ] && [ -n "$glibc" ]; then
+	die "the glibc Chamesle has no ZFS: neither Artix nor Arch carries it"
+elif [ "$rootfs" = zfs ]; then
 	cmdline="root=ZFS=$rootdev rootfstype=zfs"
 	feature zfs zfs zfs-openrc $(for k in $kernels; do echo zfs-$k; done)
 	for s in zfs-import zfs-mount; do [ -e "$t/etc/runlevels/sysinit/$s" ] || ln -s /etc/init.d/$s "$t/etc/runlevels/sysinit/$s"; done
 else
 	uuid=$(blkid -s UUID -o value "$rootdev") || die "no UUID for $rootdev"
 	cmdline="root=UUID=$uuid modules=sd-mod,usb-storage,nvme,$rootfs rootfstype=$rootfs"
+	[ -n "$glibc" ] && cmdline="root=UUID=$uuid rw rootfstype=$rootfs"
 	if [ "$rootfs" = btrfs ]; then
 		sub=$(echo "$rootopts" | tr , '\n' | sed -n 's|^subvol=/*||p')
 		[ -n "$sub" ] && cmdline="$cmdline rootflags=subvol=$sub"
@@ -70,7 +82,7 @@ if [ "$bootfs" != vfat ]; then
 menuentry 'Chamesle ($k)' {
 	search --no-floppy --fs-uuid --set=root $(blkid -s UUID -o value "$where")
 	linux $p/vmlinuz-$k $cmdline quiet
-	initrd $p/initramfs-$k
+	initrd $p/$(img $k)
 }
 G
 	done
@@ -83,7 +95,8 @@ if [ "$(lsblk -dno PTTYPE "$disk")" = gpt ] && ! lsblk -no PARTTYPE "$disk" | gr
 
 if [ $loader = grub ]; then
 	case $(cat "$t/etc/mag/arch" 2>/dev/null) in x86) efi=i386-efi;; *) efi=x86_64-efi;; esac
-	arch-chroot "$t" mag install grub grub-efi ${bios:+grub-bios} >/dev/null || die "mag install grub failed"
+	if [ -n "$glibc" ]; then arch-chroot "$t" mag install grub >/dev/null || die "mag install grub failed"
+	else arch-chroot "$t" mag install grub grub-efi ${bios:+grub-bios} >/dev/null || die "mag install grub failed"; fi
 	arch-chroot "$t" grub-install --target=$efi --efi-directory=/boot --boot-directory=/boot --removable --no-nvram >/dev/null || die "grub-install for UEFI failed"
 	echo "UEFI: GRUB in EFI/BOOT on $bootdev"
 	if [ -n "$bios" ]; then
@@ -98,7 +111,7 @@ if [ $loader = grub ]; then
 		echo "set timeout=3"
 		for k in $kernels; do
 			printf "\nmenuentry 'Chamesle (%s)' {\n\tsearch --no-floppy --fs-uuid --set=root %s\n" "$k" "$(blkid -s UUID -o value "$bootdev")"
-			printf '\tlinux /vmlinuz-%s %s quiet\n\tinitrd /initramfs-%s\n}\n' "$k" "$cmdline" "$k"
+			printf '\tlinux /vmlinuz-%s %s quiet\n\tinitrd /%s\n}\n' "$k" "$cmdline" "$(img $k)"
 		done
 	} > "$c"
 	cat "$c"
@@ -113,7 +126,7 @@ c=$t/boot/limine.conf
 	echo "timeout: 3"
 	for k in $kernels; do
 		printf '\n/Chamesle (%s)\n    protocol: linux\n    path: boot():/vmlinuz-%s\n' "$k" "$k"
-		printf '    module_path: boot():/initramfs-%s\n    cmdline: %s quiet\n' "$k" "$cmdline"
+		printf '    module_path: boot():/%s\n    cmdline: %s quiet\n' "$(img $k)" "$cmdline"
 	done
 } > "$c"
 cat "$c"
