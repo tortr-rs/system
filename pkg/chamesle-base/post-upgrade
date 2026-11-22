@@ -1,4 +1,9 @@
 #!/bin/sh
+# NetworkManager starts its own wpa_supplicant; the service next to it takes the card away from it
+if [ -e /etc/runlevels/default/networkmanager ] && [ -e /etc/runlevels/default/wpa_supplicant ]; then
+	rm -f /etc/runlevels/default/wpa_supplicant
+	echo "chamesle-base: wpa_supplicant is off at boot, NetworkManager starts its own (reboot, or rc-service wpa_supplicant stop)"
+fi
 # from dinit (or Winchester) to OpenRC, once: what was enabled there is enabled in the default runlevel
 [ -e /etc/runlevels/boot/hostname ] && exit 0
 levels() {
@@ -22,6 +27,7 @@ for s in $on; do
 	esac
 	add default $s
 done
+[ -e /etc/runlevels/default/networkmanager ] && rm -f /etc/runlevels/default/wpa_supplicant
 command -v zpool >/dev/null && add sysinit zfs-import zfs-mount
 rm -rf /etc/dinit.d
 echo "chamesle-base: the init is OpenRC now. enabled: $(ls /etc/runlevels/default | tr '\n' ' ')"
