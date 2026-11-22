@@ -1,0 +1,122 @@
+#!/bin/sh
+# chamesle-install: the install of chapter 3 of the handbook, asked for in dialog boxes. it takes a whole disk and runs
+# chamesle-disk, chamesle-bootstrap and chamesle-boot with what you chose.
+die() { clear; echo "chamesle-install: $*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || die "needs root"
+command -v dialog >/dev/null || die "dialog is not installed: mag install dialog"
+T="Chamesle"
+d() { dialog --stdout --backtitle "$T installer" "$@"; }
+msg() { d --msgbox "$1" 0 0; }
+log=/var/log/chamesle-install.log
+
+online() { curl -fsS -m 8 -o /dev/null https://chamesle.org/repo/x86_64/APKINDEX.tar.gz; }
+while ! online; do
+	c=$(d --menu "There is no network. A cable just works; for wifi, connect with iwctl:\n  station wlan0 scan\n  station wlan0 get-networks\n  station wlan0 connect NAME" 0 0 0 \
+		wifi "connect in iwctl, then come back" retry "try again" quit "leave the installer") || die "left"
+	case $c in
+	wifi) clear; iwctl;;
+	quit) die "left";;
+	esac
+done
+
+disks=
+for b in /sys/block/*; do
+	n=${b##*/}
+	case $n in loop*|ram*|sr*|zram*|fd*|md*|dm-*) continue;; esac
+	grep -q "^/dev/$n" /proc/mounts && continue
+	[ "$(cat "$b/size")" -gt 0 ] || continue
+	disks="$disks /dev/$n '$(lsblk -dno SIZE,MODEL "/dev/$n" | tr -cd 'A-Za-z0-9 ._-' | tr -s ' ')'"
+done
+[ -n "$disks" ] || die "there is no disk to install on"
+disk=$(eval d --menu "'Which disk? Everything on it will be erased.'" 0 0 0 "$disks") || die "left"
+
+fs=$(d --default-item zfs --menu "The file system of the root" 0 0 0 \
+	zfs "ZFS: compression, snapshots, checksums (the handbook's default)" \
+	btrfs "btrfs: compression, snapshots, subvolumes @ and @home" \
+	ext4 "ext4: plain and simple") || die "left"
+
+loader=$(d --menu "The bootloader" 0 0 0 \
+	limine "limine: small, UEFI and BIOS" \
+	grub "GRUB: UEFI and BIOS") || die "left"
+
+# the firmware the hardware here wants, ticked already
+has() { for v in /sys/bus/pci/devices/*; do [ "$(cat $v/vendor)" = "$1" ] && case $(cat $v/class) in $2*) return 0;; esac; done; return 1; }
+on() { has "$@" && echo on || echo off; }
+fw=$(d --separate-output --checklist "Firmware for the hardware (ticked: what this machine has)" 0 0 0 \
+	linux-firmware-intel "Intel wifi and bluetooth" $(on 0x8086 0x0280) \
+	linux-firmware-i915 "Intel graphics" $(on 0x8086 0x03) \
+	linux-firmware-amdgpu "AMD graphics" $(on 0x1002 0x03) \
+	linux-firmware-rtw88 "Realtek wifi (older)" $(on 0x10ec 0x0280) \
+	linux-firmware-rtw89 "Realtek wifi (newer)" off \
+	linux-firmware-mediatek "MediaTek wifi" $(on 0x14c3 0x0280) \
+	linux-firmware-nvidia "NVIDIA graphics (nouveau)" $(on 0x10de 0x03) \
+	linux-firmware-rtl_nic "Realtek ethernet" $(on 0x10ec 0x0200)) || die "left"
+
+wifi=$(d --menu "Wifi on the installed system" 0 0 0 \
+	iwd "iwd, connect with iwctl" \
+	networkmanager "NetworkManager, connect with nmtui" \
+	none "cable only") || die "left"
+
+host=$(d --inputbox "The host name" 0 0 chamesle) || die "left"
+host=$(echo "$host" | tr -cd 'a-zA-Z0-9-')
+[ -n "$host" ] || host=chamesle
+
+pw() {
+	while :; do
+		a=$(d --insecure --passwordbox "$1" 0 0) || die "left"
+		b=$(d --insecure --passwordbox "$1, again" 0 0) || die "left"
+		[ -n "$a" ] && [ "$a" = "$b" ] && { echo "$a"; return; }
+		msg "They are not the same, or empty. Again."
+	done
+}
+rootpw=$(pw "The root password")
+user=$(d --inputbox "Your user name (empty for none)" 0 0) || die "left"
+user=$(echo "$user" | tr -cd 'a-z0-9_-')
+[ -n "$user" ] && userpw=$(pw "The password of $user")
+
+d --yesno "Install now?\n\n  disk        $disk (ERASED)\n  file system $fs\n  bootloader  $loader\n  firmware    $(echo $fw)\n  network     $wifi\n  host name   $host\n  user        ${user:-none}" 0 0 || die "nothing was changed"
+
+pkgs=
+case $wifi in
+iwd) pkgs=iwd;;
+networkmanager) pkgs="networkmanager networkmanager-wifi networkmanager-tui";;
+esac
+first=$(echo $fw | cut -d' ' -f1)
+rest=$(echo $fw | cut -s -d' ' -f2-)
+
+step() { echo "==> $1" >> $log; d --infobox "$1" 3 60; }
+: > $log
+(
+	step "Making the file systems on $disk"
+	chamesle-disk -t $fs -y "$disk" >> $log 2>&1 || exit 1
+	step "Installing the base (a few minutes)"
+	n=0
+	until chamesle-bootstrap -n "$host" ${first:+-f $first} /mnt $rest $pkgs >> $log 2>&1; do
+		n=$((n + 1))
+		[ $n -lt 3 ] || exit 1
+		sleep 5
+	done
+	step "Passwords and the user"
+	echo "root:$rootpw" | arch-chroot /mnt chpasswd >> $log 2>&1 || exit 1
+	if [ -n "$user" ]; then
+		arch-chroot /mnt adduser -D "$user" >> $log 2>&1 || exit 1
+		echo "$user:$userpw" | arch-chroot /mnt chpasswd >> $log 2>&1 || exit 1
+		for g in wheel video input audio netdev; do arch-chroot /mnt addgroup "$user" $g >> $log 2>&1; done
+	fi
+	step "Services"
+	case $wifi in
+	iwd) arch-chroot /mnt rc-update add iwd default >> $log 2>&1;;
+	networkmanager)
+		arch-chroot /mnt rc-update del dhcpcd default >> $log 2>&1
+		arch-chroot /mnt rc-update add networkmanager default >> $log 2>&1;;
+	esac
+	step "The bootloader"
+	chamesle-boot -b $loader /mnt >> $log 2>&1 || exit 1
+	cp $log /mnt/var/log/ 2>/dev/null
+	umount -R /mnt
+	[ $fs = zfs ] && zpool export rpool
+	exit 0
+) || { d --title "It failed" --textbox $log 0 0; die "the install failed, the log is $log"; }
+
+d --yesno "Chamesle is installed on $disk.\n\nTake out the USB stick and reboot?" 0 0 && reboot
+clear

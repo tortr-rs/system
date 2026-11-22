@@ -1,4 +1,0 @@
-type = process
-command = /sbin/udevd
-depends-on = rootfs
-smooth-recovery = true

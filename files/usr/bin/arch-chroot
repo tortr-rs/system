@@ -220,7 +220,7 @@ offline_mode() {
 
   [[ $userspec ]] && chroot_args+=(--userspec "$userspec")
 
-  SHELL=/bin/bash SYSTEMD_IN_CHROOT=1 $pid_unshare chroot "${chroot_args[@]}" -- "$chrootdir" "${args[@]}"
+  SHELL=/bin/bash SYSTEMD_IN_CHROOT=1 $pid_unshare chroot "${chroot_args[@]}" "$chrootdir" "${args[@]}"
 }
 
 arch-chroot() {

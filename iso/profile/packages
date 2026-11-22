@@ -19,3 +19,8 @@ linux-firmware-intel
 curl
 vim
 less
+dialog
+btrfs-progs
+iwd-openrc
+dbus-openrc
+wipefs

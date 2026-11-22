@@ -1,20 +1,30 @@
 #!/bin/sh
-# chamesle-boot [DIR]: makes the system in DIR (/mnt) bootable. writes /boot/limine.conf from what is mounted there,
-# installs limine into it and puts limine on the disk for UEFI, and for BIOS when the disk has room for it.
-# if /boot is not FAT, limine cannot read it, so it prints an entry for the GRUB of the other system instead.
+# chamesle-boot [-b limine|grub] [DIR]: makes the system in DIR (/mnt) bootable. writes the boot entries from what is
+# mounted there, installs the bootloader (limine unless -b grub) into it and puts it on the disk for UEFI, and for BIOS
+# when the disk has room for it. if /boot is not FAT, it prints an entry for the GRUB of the other system instead.
 #   chamesle-boot
-#   chamesle-boot /mnt
+#   chamesle-boot -b grub /mnt
 die() { echo "chamesle-boot: $*" >&2; exit 1; }
-[ $# -le 1 ] || { echo "usage: chamesle-boot [DIR]" >&2; exit 2; }
+usage() { echo "usage: chamesle-boot [-b limine|grub] [DIR]" >&2; exit 2; }
+loader=limine
+while getopts b: o; do
+	case $o in
+	b) loader=$OPTARG;;
+	*) usage;;
+	esac
+done
+shift $((OPTIND - 1))
+case $loader in limine|grub) ;; *) die "-b is limine or grub";; esac
+[ $# -le 1 ] || usage
 [ "$(id -u)" = 0 ] || die "needs root"
 t=${1:-/mnt}
 t=${t%/}
 [ -x "$t/sbin/init" ] || die "$t has no system in it, run chamesle-bootstrap first"
 
-mnt() { awk -v m="$1" '$2 == m { print $1, $3 }' /proc/mounts | tail -1; }
+mnt() { awk -v m="$1" '$2 == m { print $1, $3, $4 }' /proc/mounts | tail -1; }
 set -- $(mnt "$t")
-[ $# = 2 ] || die "nothing is mounted on $t"
-rootdev=$1 rootfs=$2
+[ $# = 3 ] || die "nothing is mounted on $t"
+rootdev=$1 rootfs=$2 rootopts=$3
 set -- $(mnt "$t/boot")
 bootdev=$1 bootfs=$2
 
@@ -22,18 +32,30 @@ kernels=
 for k in "$t"/boot/vmlinuz-*; do [ -e "$k" ] && kernels="$kernels ${k##*/vmlinuz-}"; done
 [ -n "$kernels" ] || die "no kernel in $t/boot, install linux-lts first"
 
+# feature NAME PACKAGE...: puts NAME in the initramfs, with the packages it needs
+feature() {
+	conf=$t/etc/mkinitfs/mkinitfs.conf
+	grep -qE "^features=\"([^\"]* )?$1( |\")" "$conf" && return
+	echo "adding $1 to the initramfs"
+	f=$1
+	shift
+	arch-chroot "$t" mag install "$@" || die "mag install $* failed"
+	sed -i "/^features=/s/\"\$/ $f\"/" "$conf"
+	for m in "$t"/lib/modules/*; do arch-chroot "$t" mkinitfs "${m##*/}" || die "mkinitfs failed"; done
+}
+
 if [ "$rootfs" = zfs ]; then
 	cmdline="root=ZFS=$rootdev rootfstype=zfs"
-	conf=$t/etc/mkinitfs/mkinitfs.conf
-	if ! grep -q '^features=.*zfs' "$conf"; then
-		echo "adding zfs to the initramfs"
-		arch-chroot "$t" mag install zfs $(for k in $kernels; do echo zfs-$k; done) || die "mag install zfs failed"
-		sed -i '/^features=/s/"$/ zfs"/' "$conf"
-		for m in "$t"/lib/modules/*; do arch-chroot "$t" mkinitfs "${m##*/}" || die "mkinitfs failed"; done
-	fi
+	feature zfs zfs zfs-openrc $(for k in $kernels; do echo zfs-$k; done)
+	for s in zfs-import zfs-mount; do [ -e "$t/etc/runlevels/sysinit/$s" ] || ln -s /etc/init.d/$s "$t/etc/runlevels/sysinit/$s"; done
 else
 	uuid=$(blkid -s UUID -o value "$rootdev") || die "no UUID for $rootdev"
 	cmdline="root=UUID=$uuid modules=sd-mod,usb-storage,nvme,$rootfs rootfstype=$rootfs"
+	if [ "$rootfs" = btrfs ]; then
+		sub=$(echo "$rootopts" | tr , '\n' | sed -n 's|^subvol=/*||p')
+		[ -n "$sub" ] && cmdline="$cmdline rootflags=subvol=$sub"
+		feature btrfs btrfs-progs
+	fi
 fi
 
 if [ "$bootfs" != vfat ]; then
@@ -52,6 +74,34 @@ menuentry 'Chamesle ($k)' {
 }
 G
 	done
+	exit 0
+fi
+
+disk=/dev/$(lsblk -no PKNAME "$bootdev" | head -1)
+bios=1
+if [ "$(lsblk -dno PTTYPE "$disk")" = gpt ] && ! lsblk -no PARTTYPE "$disk" | grep -qi 21686148-6449-6e6f-744e-656564454649; then bios=; fi
+
+if [ $loader = grub ]; then
+	case $(cat "$t/etc/mag/arch" 2>/dev/null) in x86) efi=i386-efi;; *) efi=x86_64-efi;; esac
+	arch-chroot "$t" mag install grub grub-efi ${bios:+grub-bios} >/dev/null || die "mag install grub failed"
+	arch-chroot "$t" grub-install --target=$efi --efi-directory=/boot --boot-directory=/boot --removable --no-nvram >/dev/null || die "grub-install for UEFI failed"
+	echo "UEFI: GRUB in EFI/BOOT on $bootdev"
+	if [ -n "$bios" ]; then
+		arch-chroot "$t" grub-install --target=i386-pc --boot-directory=/boot "$disk" >/dev/null || die "grub-install for BIOS failed"
+		echo "BIOS: GRUB is on $disk"
+	else
+		echo "BIOS: $disk is GPT with no BIOS boot partition, so it boots by UEFI only"
+	fi
+	c=$t/boot/grub/grub.cfg
+	[ -e "$c" ] && mv "$c" "$c.old" && echo "the old grub.cfg is grub.cfg.old"
+	{
+		echo "set timeout=3"
+		for k in $kernels; do
+			printf "\nmenuentry 'Chamesle (%s)' {\n\tsearch --no-floppy --fs-uuid --set=root %s\n" "$k" "$(blkid -s UUID -o value "$bootdev")"
+			printf '\tlinux /vmlinuz-%s %s quiet\n\tinitrd /initramfs-%s\n}\n' "$k" "$cmdline" "$k"
+		done
+	} > "$c"
+	cat "$c"
 	exit 0
 fi
 
@@ -74,8 +124,7 @@ for e in BOOTX64.EFI BOOTIA32.EFI; do [ -e "$t/usr/share/limine/$e" ] && cp "$t/
 echo "UEFI: EFI/BOOT on $bootdev"
 
 cp "$t/usr/share/limine/limine-bios.sys" "$t/boot/"
-disk=/dev/$(lsblk -no PKNAME "$bootdev" | head -1)
-if [ "$(lsblk -dno PTTYPE "$disk")" = gpt ] && ! lsblk -no PARTTYPE "$disk" | grep -qi 21686148-6449-6e6f-744e-656564454649; then
+if [ -z "$bios" ]; then
 	echo "BIOS: $disk is GPT with no BIOS boot partition, so it boots by UEFI only"
 else
 	arch-chroot "$t" limine bios-install "$disk" >/dev/null || die "limine bios-install $disk failed"

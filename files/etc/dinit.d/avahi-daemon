@@ -1,4 +1,0 @@
-type = process
-command = /usr/sbin/avahi-daemon -s
-depends-on = dbus
-smooth-recovery = true

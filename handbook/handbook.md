@@ -2,7 +2,7 @@
 
 1. About Chamesle
 2. Preparing
-3. Installing by hand
+3. Installing
 4. mag
 5. rifle
 6. The base system
@@ -16,9 +16,9 @@
 
 ### 1.1 What it is
 
-Chamesle is a small Linux distribution on musl that you put on a disk yourself, from the ISO. There is no installer and
-nothing is compiled: `chamesle-bootstrap` puts the base into an empty root with the package manager, and you write the
-fstab, the password and the boot entry by hand. This handbook goes through every step.
+Chamesle is a small Linux distribution on musl, installed from the ISO. Nothing is compiled: `chamesle-bootstrap` puts
+the base into an empty root with the package manager. `chamesle-install` does the whole install from a few questions,
+or you do it by hand, writing the fstab, the password and the boot entry yourself. This handbook goes through every step.
 
 The parts:
 
@@ -29,7 +29,7 @@ The parts:
 | mag    | the package manager, binary packages only, in one C file |
 | rifle  | the coreutils, all in one C file; `cat`, `ls`, `cp` and the rest are links to one program |
 | mksh   | the login shell; `/bin/sh` is busybox's ash |
-| init   | dinit, with Chamesle's services in `/etc/dinit.d` |
+| init   | OpenRC, the services come with their packages |
 | limine | the boot loader, BIOS and UEFI |
 
 Chamesle is made to be the most UNIX distribution possible, and to run on almost anything: the same base goes on a new
@@ -39,7 +39,7 @@ laptop and on a Pentium 4 with 256 MB of memory. It is a system for the tty firs
 
 mag reads two kinds of repository, both signed:
 
-* Chamesle's own, at `https://chamesle.org/repo`: `chamesle-base` (the dinit services, the tools of this
+* Chamesle's own, at `https://chamesle.org/repo`: `chamesle-base` (the files in `/etc`, the tools of this
   book and the keys), `mag` and `rifle`
 * a large musl repository with everything else: the kernel, the firmware, the libraries, editors, compilers, X, about
   28,000 packages for x86_64
@@ -113,18 +113,29 @@ For wireless, `iwctl` (iwd runs at boot on the ISO):
 It asks for the passphrase. dhcpcd gives the interface an address once it is connected.
 
 
-## 3. Installing by hand
+## 3. Installing
+
+The live system has `chamesle-install`, which asks for the disk, the file system (ZFS, btrfs or ext4), the bootloader
+(limine or GRUB), the firmware (what the machine has is ticked), wifi, the host name, the root password and a user, and
+then does this chapter on the whole disk. The log is `/var/log/chamesle-install.log`, and a copy is kept on the new
+system. The rest of the chapter is the same install by hand, for another layout or to know what it did.
 
 Follow the BIOS or the UEFI variant where they differ. The disk here is `/dev/sda`; change it to yours. Everything below
 is run as root on the live system, and it erases the disk.
 
-There are two ways through 3.1 and 3.2: `chamesle-disk` does the partitioning and the file systems and leaves the
-root on ZFS, or you do both yourself with the root on ext4. From 3.3 on the steps are the same, and they are yours:
+There are two ways through 3.1 and 3.2: `chamesle-disk` does the partitioning and the file systems, or you do both
+yourself. From 3.3 on the steps are the same, and they are yours:
 `chamesle-disk` is only a helper.
 
 ### 3.1 chamesle-disk
 
     chamesle-disk /dev/sda
+    chamesle-disk -t btrfs /dev/sda
+    chamesle-disk -t ext4 -y /dev/sda
+
+`-t` is the file system of the root: `zfs` (the default), `btrfs` or `ext4`. btrfs gets the subvolumes `@` for `/`
+and `@home` for `/home`, mounted with `compress=zstd`. `-y` asks nothing and lays out the whole disk as in the table
+below.
 
 It lists the disk and asks you to type its name before it touches anything. Then it starts `cfdisk` so you lay out the
 partitions. Three of them work for BIOS and UEFI both:
@@ -197,7 +208,7 @@ Packages after the target go in too. A ThinkPad with Intel wireless and graphics
 
     chamesle-bootstrap -n t480 -f linux-firmware-intel /mnt vim
 
-What `chamesle-base` brings: dinit and the files of chapter 6, mag, rifle, mksh, busybox for the tools rifle does not
+What `chamesle-base` brings: OpenRC and the files of chapter 6, mag, rifle, mksh, busybox for the tools rifle does not
 have, bash, `agetty`, eudev, kmod, dhcpcd, e2fsprogs, curl and `arch-chroot`.
 
 ### 3.4 Working inside the new root
@@ -239,11 +250,16 @@ The hash goes into `/etc/shadow`. The login shell of root is mksh.
 ### 3.7 The boot entry
 
     chamesle-boot /mnt
+    chamesle-boot -b grub /mnt
+
+`-b grub` installs GRUB instead of limine, for UEFI and for BIOS, and writes `/boot/grub/grub.cfg` the same way.
 
 It looks at what is mounted on `/mnt` and `/mnt/boot` and
 
 * installs `limine` into the new root, so its boot files and its `limine` are the same version
-* for a root on ZFS, installs `zfs` and `zfs-lts` and adds `zfs` to the initramfs (7.5)
+* for a root on ZFS, installs `zfs` and `zfs-lts`, adds `zfs` to the initramfs (7.5) and `zfs-import` and
+  `zfs-mount` to the sysinit runlevel; for btrfs, installs `btrfs-progs`, adds `btrfs` to the initramfs and puts the
+  subvolume on the kernel command line
 * writes `/mnt/boot/limine.conf` with an entry for every kernel in `/mnt/boot`, the root by UUID, or by dataset on ZFS
 * copies `BOOTX64.EFI` to `EFI/BOOT/` on the boot partition, for UEFI
 * runs `limine bios-install` on the disk, for BIOS; on a GPT disk only when it has a BIOS boot partition, else it says
@@ -306,8 +322,8 @@ Do both and the disk boots either way.
 
 Leave out `zpool export` if the root is not on ZFS.
 
-Take out the installation medium. limine shows the entry for three seconds and boots the kernel. dinit mounts the
-file systems, starts the services of `/etc/dinit.d/boot.d` and puts a login on the ttys. Log in as root. `dhcpcd` brings up a
+Take out the installation medium. limine shows the entry for three seconds and boots the kernel. OpenRC mounts the
+file systems, starts the services of the runlevels and puts a login on the ttys. Log in as root. `dhcpcd` brings up a
 cable at boot; for wireless see section 6.8.
 
 ### 3.9 What to install next
@@ -549,70 +565,47 @@ not. `./build.sh` has to have run first. A case that starts with `@ro` runs with
 
 ### 6.1 init
 
-The init is dinit. `/sbin/init` is a short script: it mounts `proc`, `sysfs`, `devtmpfs` and `/run`, and hands over
-to `dinit`, which stays process 1. dinit starts the service called `boot` and everything it needs, keeps the
-services running, and stops them all in order when the machine goes down. The files are in `files/` in the sources and
-`chamesle-bootstrap` copies them into the root.
+The init is OpenRC. `/sbin/init` is busybox init, which reads `/etc/inittab`: it runs `openrc sysinit`, `openrc boot`
+and `openrc default` in turn, then puts a login on `tty1` to `tty6`. OpenRC starts the services of each runlevel, each
+after what it needs, and stops them in order when the machine goes down.
 
-A boot goes:
+A runlevel is a directory in `/etc/runlevels` with links to the services in `/etc/init.d`. A fresh install has:
 
-1. `rootfs`: `fsck` checks the file systems (not with `fastboot` on the kernel command line), `/` is remounted
-   read-write, `devpts`, `/dev/shm` and the cgroup2 hierarchy are mounted, `mount -a` mounts `/etc/fstab`, `zfs mount -a`
-   mounts the ZFS datasets, `swapon -a`, and `/tmp` is emptied. A failed check gives a root shell; leave it to go on.
-2. `udevd`, then `setup`: loopback up, the clock, the host name from `/etc/hostname`, `/etc/sysctl.d/*.conf`, the
-   modules (6.6), and `dmesg` into `/var/log/dmesg.boot`.
-3. `udev-trigger` replays the devices and waits for them.
-4. Every service in `/etc/dinit.d/boot.d`, all at once, each after what it depends on.
+| runlevel | services |
+|---|---|
+| sysinit | `devfs`, `dmesg`, `udev`, `udev-trigger`, `udev-settle` |
+| boot | `modules`, `hwclock`, `sysctl`, `hostname`, `bootmisc`, `syslog`, `seedrng`, `swap` |
+| default | `udev-postmount`, `dhcpcd` |
+| shutdown | `killprocs`, `mount-ro`, `savecache` |
 
-`single` on the kernel command line starts a root shell and nothing else; the boot goes on when you leave it. If the
-boot fails, dinit starts a root shell too.
+`fsck`, `root` and `localmount` come in because the boot ones need them: the file systems are checked, `/` is remounted
+read-write and `/etc/fstab` is mounted. On ZFS, `zfs-import` and `zfs-mount` are in sysinit too.
 
 ### 6.2 Services
 
-A service is a file in `/etc/dinit.d` named after it. The base set has one for every common daemon, ready for when its
-package is installed: `dbus`, `elogind`, `seatd`, `dhcpcd`, `iwd`, `wpa_supplicant`, `NetworkManager`, `connmand`,
-`lightdm`, `sddm`, `gdm`, `xdm`, `greetd`, `sshd`, `chronyd`, `ntpd`, `crond`, `syslogd`, `klogd`, `acpid`, `cupsd`,
-`bluetoothd`, `avahi-daemon`, and the logins `tty1` to `tty6` and `ttyS0`. `dinitctl` does the rest:
+Every package with a daemon has its service next to it, in a package called after it with `-openrc` on the end. mag
+installs that one by itself once OpenRC and the daemon are both there, so `mag install lightdm` brings `lightdm-openrc`
+too. Then:
 
-    dinitctl list                    every service that is loaded, and its state
-    dinitctl start iwd
-    dinitctl stop iwd
-    dinitctl restart dhcpcd
-    dinitctl status dbus
-    dinitctl enable NetworkManager   start it now and at every boot
-    dinitctl disable dhcpcd          not at boot any more
+    rc-update add lightdm            start it at every boot
+    rc-update del dhcpcd             not at boot any more
+    rc-service iwd start
+    rc-service iwd stop
+    rc-service dhcpcd restart
+    rc-status                        what runs, by runlevel
+    rc-update                        what starts at boot, and in which runlevel
 
-`enable` and `disable` make and remove a link in `/etc/dinit.d/boot.d`; that directory is the list of what starts
-at boot. A fresh install has `dhcpcd` and `tty1` to `tty6` in it. As a user in `wheel`, `dinitctl` asks for your
-password through doas. Where dinit is not running, in `arch-chroot /mnt` for one, `enable` and `disable` still work. `service NAME start` and the rest still work and
-run `dinitctl`.
+`rc-update add` puts a service in the default runlevel unless you name another. `service NAME start` works too. The
+service files are in `/etc/init.d` and their settings in `/etc/conf.d/NAME`. `openrc-run(8)` has the rest.
 
-A service whose process dies is started again, unless it dies over and over in a few seconds; then dinit gives up and
-`dinitctl list` shows it stopped. To add a service, write its file. A daemon that can stay in the foreground is a
-`process`:
-
-    # /etc/dinit.d/chronyd
-    type = process
-    command = /usr/sbin/chronyd -d
-    depends-on = system
-    smooth-recovery = true
-
-`depends-on = system` waits for the file systems and devices; `depends-on = dbus` for the system bus. `dinit-service(5)`
-has every setting.
-
-Chamesle before base r18 ran Winchester, a shell init with `/etc/init.conf` and scripts in `/etc/rc.d`. The upgrade
-to r18 moves you over by itself: the host name goes to `/etc/hostname`, the services of `boot-services` and the
-`ttys` are enabled in dinit (`network` is `dhcpcd` now, `udev` and `modules` are part of the boot), and `init.conf`
-is kept as `/etc/init.conf.old`. A changed `getty` line is not carried over; edit `/etc/dinit.d/ttyN` for that.
+Chamesle before base r20 ran dinit, and before r18 Winchester. The upgrade to r20 moves you over by itself: what was
+enabled there (`/etc/dinit.d/boot.d`, or `boot-services` of `/etc/init.conf`) is added to the default runlevel. dinit
+is still process 1 until the next boot, so reboot that once with `dinit-reboot`.
 
 ### 6.3 Shutting down
 
-`reboot`, `halt` and `poweroff` ask dinit to stop. It stops the services, the ones others depend on last, sends
-`TERM` and then `KILL` to what is left, turns swap off, unmounts the file systems and powers off. `shutdown -r`, `-h` or
-`-p` does the same, at once (`now`) or after `+minutes`, with an optional message sent through `wall`:
-
-    shutdown -r now
-    shutdown -p +10 back in ten minutes
+`reboot`, `halt` and `poweroff` ask init to stop. `openrc shutdown` stops the services, the ones others need last,
+sends `TERM` and then `KILL` to what is left, turns swap off and remounts the file systems read-only.
 
 ### 6.4 The files in /etc
 
@@ -621,7 +614,7 @@ is kept as `/etc/init.conf.old`. A changed `getty` line is not carried over; edi
 | `passwd`, `shadow`, `group` | accounts, password hashes, groups |
 | `shells` | the login shells; `/bin/mksh` is one |
 | `hostname` | the host name |
-| `dinit.d/` | the services, and in `boot.d` the ones started at boot (6.2) |
+| `init.d/`, `runlevels/` | the services, and the ones started at boot (6.2) |
 | `modules` | kernel modules loaded at boot, one a line |
 | `fstab` | the file systems (3.5) |
 | `profile` | `PATH`, `PAGER`, `umask 022`, and `/etc/profile.d/*.sh` |
@@ -668,7 +661,7 @@ A static address:
     ip route add default via 192.168.1.1
     echo 'nameserver 192.168.1.1' > /etc/resolv.conf
 
-and `dinitctl disable dhcpcd`.
+and `rc-update del dhcpcd`.
 
 ### 6.8 Wireless
 
@@ -676,9 +669,10 @@ The card needs its firmware (7.4). Then iwd:
 
     mag install iwd dbus
 
-and enable it, which starts dbus with it:
+and add it, which starts dbus with it:
 
-    dinitctl enable iwd
+    rc-update add iwd
+    rc-service iwd start
 
 `iwctl` connects, the same as on the ISO (2.3), and remembers
 the network. dhcpcd gives it an address.
@@ -859,7 +853,7 @@ A changed file under `/etc` is never written over. When a package brings a new o
 | a BIOS machine does not boot | `limine bios-install /dev/sda` was not run, or `limine-bios.sys` is not in `/boot` |
 | a UEFI machine does not boot | `EFI/BOOT/BOOTX64.EFI` is not on the EFI partition, or the partition is not of type EFI System |
 | no wireless interface | the firmware is missing (7.4); `dmesg` names the file |
-| no devices in `/dev` | udev did not start; `dinitctl status udevd` |
+| no devices in `/dev` | udev did not start; `rc-service udev status` |
 
 
 ## 10. X and a window manager
@@ -959,8 +953,8 @@ X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
 
 | path | what |
 |------|------|
-| `/sbin/init` | mounts what dinit needs and starts it |
-| `/etc/dinit.d/`, `/etc/dinit.d/boot.d/` | the services, and the ones started at boot |
+| `/sbin/init`, `/etc/inittab` | busybox init, which runs OpenRC |
+| `/etc/init.d/`, `/etc/runlevels/` | the services, and the ones started at boot |
 | `/usr/lib/chamesle/` | the boot scripts the services run |
 | `/etc/hostname`, `/etc/modules` | host name, modules loaded at boot |
 | `/etc/profile` | `PATH`, `umask` |
@@ -989,7 +983,7 @@ X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
 | `system/tools/chamesle-boot` | limine.conf and limine for the system in a directory |
 | `system/tools/chamesle-disk` | cfdisk, vfat boot partition, ZFS root, mounted on `/mnt` |
 | `system/tools/mkapk`, `mkrepo`, `mkpkgs` | packages, signed indexes, Chamesle's own repo |
-| `system/files/` | `/sbin/init`, the dinit services and boot scripts, `service`, in `chamesle-base` |
+| `system/files/` | the files in `/etc` and the tools, in `chamesle-base` |
 | `system/pkg/chamesle-base/` | its scripts, `repos`, `os-release`, `issue` |
 | `system/keys/` | the public keys the repos are signed with |
 | `system/iso/mkiso`, `mkinitramfs`, `init` | the live ISO, its initramfs and the first process in it |

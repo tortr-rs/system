@@ -1,4 +1,0 @@
-# what dinit starts: the system, then every service enabled with dinitctl enable
-type = internal
-depends-on = system
-waits-for.d = /etc/dinit.d/boot.d

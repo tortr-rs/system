@@ -1,4 +1,0 @@
-type = process
-command = /usr/sbin/connmand -n
-depends-on = dbus
-smooth-recovery = true

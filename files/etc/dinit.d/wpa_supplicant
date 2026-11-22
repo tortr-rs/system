@@ -1,4 +1,0 @@
-type = process
-command = /sbin/wpa_supplicant -u -s
-depends-on = dbus
-smooth-recovery = true

@@ -1,5 +1,0 @@
-type = process
-command = /usr/sbin/gdm
-depends-on = dbus
-waits-for = elogind
-restart = true

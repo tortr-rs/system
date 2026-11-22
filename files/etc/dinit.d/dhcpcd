@@ -1,4 +1,0 @@
-type = process
-command = /usr/lib/chamesle/dhcpcd
-depends-on = system
-smooth-recovery = true

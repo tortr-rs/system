@@ -50,7 +50,7 @@ def page(title, desc, url, body):
 <hr>
 <div id="foot">
 Something wrong on this page? Tell us on the <a href="board.html">board</a>.<br>
-Chamesle is installed by hand, from the <a href="docs.html">handbook</a>.<br>
+Chamesle installs with <code>chamesle-install</code>, or by hand from the <a href="docs.html">handbook</a>.<br>
 <a href="https://ko-fi.com/L6N725GI1V">Ko-fi</a><br>
 <a href="#" id="edit-link">Edit text</a><br>
 $Date: {time.strftime('%Y-%m-%d')} $
@@ -148,7 +148,7 @@ for k, (title, body) in enumerate(chapters):
         toc.append('<ul>' + ''.join(f'<li><a href="{fname(k)}#{ident(s)}">{html.escape(s)}</a></li>' for s in subs) + '</ul>')
     toc.append('</li>')
 toc.append('</ol>')
-open(os.path.join(out, 'docs.html'), 'w').write(page('Handbook', 'The Chamesle handbook, chapter by chapter: preparing, installing by hand, SPAS, rifle, the base system, the kernel, the live ISO and the files of the system.', 'docs.html', '\n'.join(toc)))
+open(os.path.join(out, 'docs.html'), 'w').write(page('Handbook', 'The Chamesle handbook, chapter by chapter: preparing, installing, mag, rifle, the base system, the kernel, the live ISO and the files of the system.', 'docs.html', '\n'.join(toc)))
 
 for k, (title, body) in enumerate(chapters):
     name = re.sub(r'^\d+\. ', '', title)

@@ -1,69 +1,129 @@
 #!/bin/sh
-# chamesle-disk DISK: erases a disk and sets it up for Chamesle: you lay out the partitions in cfdisk, then the boot partition becomes
-# vfat and the root partition a ZFS pool, both mounted under /mnt with a fstab written. the install itself stays by hand, see the handbook.
+# chamesle-disk [-t ext4|btrfs|zfs] [-y] DISK: erases a disk and sets it up for Chamesle. the boot partition becomes vfat,
+# the root partition ext4, btrfs (subvolumes @ and @home) or a ZFS pool (the default), all mounted under /mnt with a
+# fstab written. you lay out the partitions in cfdisk; -y skips the questions and takes the whole disk:
+# a BIOS boot partition, 512M for /boot and the rest for the root.
 #   chamesle-disk /dev/nvme0n1
+#   chamesle-disk -t btrfs -y /dev/sda
 die() { echo "chamesle-disk: $*" >&2; exit 1; }
-[ $# = 1 ] || { echo "usage: chamesle-disk DISK" >&2; exit 2; }
+usage() { echo "usage: chamesle-disk [-t ext4|btrfs|zfs] [-y] DISK" >&2; exit 2; }
+fs=zfs yes=
+while getopts t:y o; do
+	case $o in
+	t) fs=$OPTARG;;
+	y) yes=1;;
+	*) usage;;
+	esac
+done
+shift $((OPTIND - 1))
+[ $# = 1 ] || usage
+case $fs in ext4|btrfs|zfs) ;; *) die "-t is ext4, btrfs or zfs";; esac
 [ "$(id -u)" = 0 ] || die "needs root"
 disk=$1
 [ -b "$disk" ] || die "$disk is not a block device"
-for t in cfdisk mkfs.fat zpool zfs blkid lsblk; do command -v $t >/dev/null || die "$t is not installed"; done
+need="mkfs.fat blkid lsblk wipefs"
+[ -n "$yes" ] && need="$need sfdisk" || need="$need cfdisk"
+case $fs in
+ext4) need="$need mkfs.ext4";;
+btrfs) need="$need mkfs.btrfs btrfs";;
+zfs) need="$need zpool zfs";;
+esac
+for t in $need; do command -v $t >/dev/null || die "$t is not installed"; done
 mountpoint -q /mnt && die "/mnt is in use, unmount it first"
-zpool list rpool >/dev/null 2>&1 && die "a pool called rpool is already imported (zpool export -f rpool to let go of it)"
+[ $fs = zfs ] && zpool list rpool >/dev/null 2>&1 && die "a pool called rpool is already imported (zpool export -f rpool to let go of it)"
 
-lsblk "$disk"
-echo "Everything on $disk will be erased."
-printf 'Type the name of the disk (%s) to go on: ' "${disk##*/}"
-read -r answer
-[ "$answer" = "${disk##*/}" ] || [ "$answer" = "$disk" ] || die "not confirmed, nothing was changed"
+# part N: the Nth partition of the disk, nvme0n1p2 as well as sda2
+part() { case $disk in *[0-9]) echo "${disk}p$1";; *) echo "$disk$1";; esac; }
 
-cfdisk "$disk" || die "cfdisk failed"
-sleep 1
-echo
-lsblk "$disk"
+if [ -n "$yes" ]; then
+	wipefs -aq "$disk"
+	sfdisk -q "$disk" <<P || die "sfdisk failed"
+label: gpt
+size=1M, type=21686148-6449-6E6F-744E-656564454649
+size=512M, type=C12A7328-F81F-11D2-BA4B-00A0C93EC93B
+type=0FC63DAF-8483-4772-8E79-3D69D8477DE4
+P
+	command -v udevadm >/dev/null && udevadm settle
+	sleep 1
+	boot=$(part 2) root=$(part 3)
+	[ -b "$boot" ] && [ -b "$root" ] || die "the new partitions $boot and $root are not there"
+else
+	lsblk "$disk"
+	echo "Everything on $disk will be erased."
+	printf 'Type the name of the disk (%s) to go on: ' "${disk##*/}"
+	read -r answer
+	[ "$answer" = "${disk##*/}" ] || [ "$answer" = "$disk" ] || die "not confirmed, nothing was changed"
+	cfdisk "$disk" || die "cfdisk failed"
+	sleep 1
+	echo
+	lsblk "$disk"
+	ask() {
+		printf '%s: ' "$1" >&2
+		read -r p
+		case $p in /dev/*) ;; *) p=/dev/$p;; esac
+		[ -b "$p" ] || die "$p is not a block device"
+		case $p in "$disk"?*) ;; *) die "$p is not a partition of $disk";; esac
+		echo "$p"
+	}
+	boot=$(ask "Which partition is the boot partition (vfat, the EFI system partition)") || exit 1
+	root=$(ask "Which partition is the root ($fs)") || exit 1
+	[ "$boot" != "$root" ] || die "boot and root cannot be the same partition"
+fi
 
-# part WHAT: asks for a partition of the disk, takes sda1 as well as /dev/sda1
-part() {
-	printf '%s: ' "$1" >&2
-	read -r p
-	case $p in /dev/*) ;; *) p=/dev/$p;; esac
-	[ -b "$p" ] || die "$p is not a block device"
-	case $p in "$disk"?*) ;; *) die "$p is not a partition of $disk";; esac
-	echo "$p"
-}
-boot=$(part "Which partition is the boot partition (vfat, the EFI system partition)") || exit 1
-root=$(part "Which partition is the root (ZFS)") || exit 1
-[ "$boot" != "$root" ] || die "boot and root cannot be the same partition"
-
-[ -e /dev/zfs ] || modprobe zfs || die "the zfs module is not there"
-modprobe vfat; modprobe nls_utf8
-mkfs.fat -F32 "$boot" || die "mkfs.fat failed"
-undo() { umount /mnt/boot 2>/dev/null; zpool export -f rpool 2>/dev/null; die "$1, rpool was exported again, run chamesle-disk again"; }
-zpool create -f -o ashift=12 -O compression=zstd -O acltype=posixacl -O xattr=sa -O mountpoint=none -R /mnt rpool "$root" || die "zpool create failed"
-zfs create -o mountpoint=/ -o canmount=noauto rpool/root || undo "zfs create failed"
-zfs mount rpool/root || undo "cannot mount rpool/root"
-zfs create -o mountpoint=/home rpool/home
-zfs create -o mountpoint=/var rpool/var
-zpool set bootfs=rpool/root rpool
+wipefs -aq "$boot" "$root"
+modprobe vfat 2>/dev/null; modprobe nls_utf8 2>/dev/null
+mkfs.fat -F32 "$boot" >/dev/null || die "mkfs.fat failed"
+case $fs in
+zfs)
+	[ -e /dev/zfs ] || modprobe zfs || die "the zfs module is not there"
+	undo() { umount /mnt/boot 2>/dev/null; zpool export -f rpool 2>/dev/null; die "$1, rpool was exported again, run chamesle-disk again"; }
+	zpool create -f -o ashift=12 -O compression=zstd -O acltype=posixacl -O xattr=sa -O mountpoint=none -R /mnt rpool "$root" || die "zpool create failed"
+	zfs create -o mountpoint=/ -o canmount=noauto rpool/root || undo "zfs create failed"
+	zfs mount rpool/root || undo "cannot mount rpool/root"
+	zfs create -o mountpoint=/home rpool/home
+	zfs create -o mountpoint=/var rpool/var
+	zpool set bootfs=rpool/root rpool
+	;;
+ext4)
+	undo() { umount -R /mnt 2>/dev/null; die "$1"; }
+	mkfs.ext4 -F -q "$root" || die "mkfs.ext4 failed"
+	mount -t ext4 "$root" /mnt || die "cannot mount $root"
+	;;
+btrfs)
+	undo() { umount -R /mnt 2>/dev/null; die "$1"; }
+	modprobe btrfs 2>/dev/null
+	mkfs.btrfs -f -q "$root" >/dev/null || die "mkfs.btrfs failed"
+	mount -t btrfs "$root" /mnt || die "cannot mount $root"
+	btrfs -q subvolume create /mnt/@ && btrfs -q subvolume create /mnt/@home || undo "cannot make the subvolumes"
+	umount /mnt
+	mount -t btrfs -o subvol=@,compress=zstd,noatime "$root" /mnt || die "cannot mount $root"
+	mkdir -p /mnt/home
+	mount -t btrfs -o subvol=@home,compress=zstd,noatime "$root" /mnt/home || undo "cannot mount @home"
+	;;
+esac
 mkdir -p /mnt/boot /mnt/etc
 mount -t vfat "$boot" /mnt/boot || undo "cannot mount $boot"
 
 if [ -e /mnt/etc/fstab ]; then
 	echo "/mnt/etc/fstab is there already, left alone"
 else
-	cat > /mnt/etc/fstab <<F
-# the zfs datasets mount themselves, so they are not listed here
-# device  mount  type  options  dump pass
-UUID=$(blkid -s UUID -o value "$boot") /boot vfat rw,noatime 0 2
-proc /proc proc defaults 0 0
-sysfs /sys sysfs defaults 0 0
-tmpfs /tmp tmpfs mode=1777,nosuid,nodev 0 0
-F
+	r=$(blkid -s UUID -o value "$root")
+	{
+		echo "# device  mount  type  options  dump pass"
+		case $fs in
+		zfs) echo "# the zfs datasets mount themselves, so they are not listed here";;
+		ext4) echo "UUID=$r / ext4 rw,noatime 0 1";;
+		btrfs)
+			echo "UUID=$r / btrfs rw,noatime,compress=zstd,subvol=@ 0 0"
+			echo "UUID=$r /home btrfs rw,noatime,compress=zstd,subvol=@home 0 0";;
+		esac
+		echo "UUID=$(blkid -s UUID -o value "$boot") /boot vfat rw,noatime 0 2"
+		echo "proc /proc proc defaults 0 0"
+		echo "sysfs /sys sysfs defaults 0 0"
+		echo "tmpfs /tmp tmpfs mode=1777,nosuid,nodev 0 0"
+	} > /mnt/etc/fstab
 fi
 
-cat <<N
-
-$boot is vfat and mounted on /mnt/boot, the pool rpool is on $root and mounted on /mnt.
-Now install the system into /mnt, then limine.conf, the host name and a password: chapter 3 of the handbook,
-section 3.3 onwards (cat /usr/share/doc/chamesle/handbook.md).
-N
+echo
+echo "$boot is vfat on /mnt/boot, $root is $fs on /mnt."
+[ -n "$yes" ] || echo "Now install the system into /mnt: chapter 3 of the handbook, section 3.3 onwards."

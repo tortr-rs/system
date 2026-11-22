@@ -1,4 +1,0 @@
-type = process
-command = /usr/lib/chamesle/foreground klogd
-depends-on = rootfs
-smooth-recovery = true

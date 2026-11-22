@@ -1,4 +1,0 @@
-type = process
-command = /usr/libexec/iwd
-depends-on = dbus
-smooth-recovery = true

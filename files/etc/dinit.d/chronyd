@@ -1,4 +1,0 @@
-type = process
-command = /usr/sbin/chronyd -n
-depends-on = system
-smooth-recovery = true

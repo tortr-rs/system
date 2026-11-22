@@ -1,8 +1,0 @@
-#!/bin/sh
-# service NAME start|stop|restart|status|enable|disable, service -l: dinitctl, the old way round
-case $1 in
--l) exec dinitctl list;;
--*|'') echo "usage: service -l | NAME start|stop|restart|status|enable|disable" >&2; exit 2;;
-esac
-[ $# = 2 ] || { echo "usage: service -l | NAME start|stop|restart|status|enable|disable" >&2; exit 2; }
-exec dinitctl "$2" "$1"

@@ -1,3 +1,5 @@
-  Chamesle live system. The handbook is /usr/share/doc/chamesle/handbook.md, chapter 3 is the install.
+
+  Chamesle live system. To install: chamesle-install
+  By hand: the handbook, /usr/share/doc/chamesle/handbook.md, chapter 3.
   Network: dhcpcd on a cable, iwctl for wireless.
 

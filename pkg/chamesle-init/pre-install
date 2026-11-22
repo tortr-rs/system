@@ -1,0 +1,5 @@
+#!/bin/sh
+# the base before r20 had its own /sbin/service, which OpenRC now brings: let go of it before openrc is installed
+f=/var/lib/mag/chamesle-base/files
+[ -f $f ] && grep -qx sbin/service $f && sed -i "/^sbin\/service$/d" $f && rm -f /sbin/service
+exit 0

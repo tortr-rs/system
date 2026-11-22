@@ -1,10 +1,1 @@
-#!/bin/sh
-# mounts what dinit needs before it starts, then hands over to it. "single" on the kernel line starts a root shell instead
-export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-mountpoint -q /proc || mount -t proc proc /proc
-mountpoint -q /sys || mount -t sysfs sysfs /sys
-mountpoint -q /dev || mount -t devtmpfs devtmpfs /dev
-[ -d /run/live ] || mountpoint -q /run || mount -t tmpfs -o mode=755,nosuid,nodev tmpfs /run
-read -r cmdline < /proc/cmdline
-case " $cmdline " in *" single "*) set -- single;; *) set --;; esac
-exec /usr/bin/dinit --system-mgr --auto-recovery "$@"
+/bin/busybox

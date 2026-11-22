@@ -1,13 +1,7 @@
 #!/bin/sh
-# from Winchester to dinit, once: the host name to /etc/hostname, the boot services and logins of init.conf enabled in dinit
+# Winchester's init.conf: its host name to /etc/hostname, the rest is read by post-upgrade
 [ -f /etc/init.conf ] || exit 0
-mkdir -p /etc/dinit.d/boot.d
-conf() { sed -n "s/^$1 *= *//p" /etc/init.conf | tr -d '{}' | tr ',' ' '; }
-h=$(conf hostname)
+h=$(sed -n 's/^hostname *= *//p' /etc/init.conf)
 [ -n "$h" ] && { [ ! -s /etc/hostname ] || [ "$(cat /etc/hostname)" = localhost ]; } && echo "$h" > /etc/hostname
-for s in $(conf boot-services) $(conf ttys); do
-	case $s in udev|modules) continue;; network) s=dhcpcd;; esac
-	ln -sf ../$s /etc/dinit.d/boot.d/$s
-done
 cp /etc/init.conf /etc/init.conf.old
 exit 0

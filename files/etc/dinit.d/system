@@ -1,4 +1,0 @@
-# the file systems, devices and settings every other service needs
-type = internal
-depends-on = setup
-waits-for = udev-trigger

@@ -40,7 +40,6 @@ mag update
 case $firmware in linux-firmware|linux-firmware-none) ;; *) firmware="linux-firmware-none $firmware";; esac
 mag install chamesle-base $firmware $kernel "$@"
 echo "$name" > "$target/etc/hostname"
-mkdir -p "$target/etc/dinit.d/boot.d"
-for s in tty1 tty2 tty3 tty4 tty5 tty6 dhcpcd; do ln -sf ../$s "$target/etc/dinit.d/boot.d/$s"; done
+[ -e "$target/etc/resolv.conf" ] || cp /etc/resolv.conf "$target/etc/" 2>/dev/null || :
 echo
 echo "the base is in $target. go on with the fstab, a password and the boot entry (handbook, 3.4)."

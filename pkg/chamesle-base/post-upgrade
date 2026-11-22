@@ -1,0 +1,29 @@
+#!/bin/sh
+# from dinit (or Winchester) to OpenRC, once: what was enabled there is enabled in the default runlevel
+[ -e /etc/runlevels/boot/hostname ] && exit 0
+levels() {
+	add() { l=$1; shift; mkdir -p /etc/runlevels/$l; for s; do [ -e /etc/runlevels/$l/$s ] || [ -L /etc/runlevels/$l/$s ] || ln -s /etc/init.d/$s /etc/runlevels/$l/$s; done; }
+	add sysinit devfs dmesg udev udev-trigger udev-settle
+	add boot modules hwclock sysctl hostname bootmisc syslog seedrng swap
+	add shutdown killprocs mount-ro savecache
+	add default udev-postmount
+}
+levels
+on=$(ls /etc/dinit.d/boot.d 2>/dev/null)
+[ -f /etc/init.conf.old ] && on="$on $(sed -n 's/^\(boot-services\|ttys\) *= *//p' /etc/init.conf.old | tr -d '{}' | tr ',' ' ')"
+for s in $on; do
+	case $s in
+	tty*|udev|modules|setup|rootfs) continue;;
+	network) s=dhcpcd;;
+	NetworkManager) s=networkmanager;;
+	bluetoothd) s=bluetooth;;
+	connmand) s=connman;;
+	syslogd) s=syslog;;
+	esac
+	add default $s
+done
+command -v zpool >/dev/null && add sysinit zfs-import zfs-mount
+rm -rf /etc/dinit.d
+echo "chamesle-base: the init is OpenRC now. enabled: $(ls /etc/runlevels/default | tr '\n' ' ')"
+[ -d /run/dinit ] || [ -S /run/dinitctl ] && echo "chamesle-base: dinit is still running, so reboot this once with: dinit-reboot"
+exit 0

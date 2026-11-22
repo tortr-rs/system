@@ -1,4 +1,0 @@
-type = process
-command = /usr/sbin/cupsd -f
-depends-on = system
-smooth-recovery = true

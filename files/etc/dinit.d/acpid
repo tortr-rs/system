@@ -1,4 +1,0 @@
-type = process
-command = /sbin/acpid -f
-depends-on = system
-smooth-recovery = true

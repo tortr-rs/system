@@ -1,7 +1,0 @@
-#!/bin/sh
-# the system bus, in the foreground for dinit
-mkdir -p /var/lib/dbus /run/dbus
-chown messagebus:messagebus /run/dbus
-[ -s /var/lib/dbus/machine-id ] || /usr/bin/dbus-uuidgen --ensure=/var/lib/dbus/machine-id
-rm -f /run/dbus/pid
-exec /usr/bin/dbus-daemon --system --nofork --nopidfile

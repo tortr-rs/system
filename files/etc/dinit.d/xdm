@@ -1,4 +1,0 @@
-type = process
-command = /usr/bin/xdm -nodaemon
-depends-on = system
-restart = true

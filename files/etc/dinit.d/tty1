@@ -1,6 +1,0 @@
-type = process
-command = /usr/lib/chamesle/getty tty1
-depends-on = system
-restart = true
-restart-delay = 2
-termsignal = HUP
