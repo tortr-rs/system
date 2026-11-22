@@ -14,12 +14,12 @@ mkapk() { "$here/tools/mkapk" -k "$KEY" -a "$arch" -o "$out" "$@"; }
 
 mkdir -p "$tmp/mag/usr/bin"
 install -m755 "$MAG" "$tmp/mag/usr/bin/mag"
-mkapk -n mag -v "$("$MAG" --version | cut -d' ' -f2)" -d "the package manager" "$tmp/mag"
+mkapk -n mag -v "$("$MAG" --version | cut -d' ' -f2)" -d "the package manager" -s "$here/pkg/mag" -t /etc/init.d "$tmp/mag"
 
 mkdir -p "$tmp/init"
 mkapk -n chamesle-init -v 1 -d "moves a base from before r20 over to OpenRC" -s "$here/pkg/chamesle-init" "$tmp/init"
 
-deps="alpine-baselayout busybox busybox-binsh busybox-suid doas mksh agetty bash mount umount findmnt util-linux-misc chamesle-init openrc busybox-openrc eudev eudev-openrc dhcpcd-openrc kmod dhcpcd e2fsprogs dosfstools curl mag"
+deps="alpine-baselayout busybox busybox-binsh busybox-suid doas mksh agetty bash mount umount findmnt util-linux-misc chamesle-init openrc busybox-openrc eudev eudev-openrc udev-init-scripts udev-init-scripts-openrc dhcpcd-openrc kmod dhcpcd e2fsprogs dosfstools curl mag"
 if [ -n "$RIFLE" ]; then
 	mkdir -p "$tmp/rifle/usr/bin"
 	install -m755 "$RIFLE" "$tmp/rifle/usr/bin/rifle"

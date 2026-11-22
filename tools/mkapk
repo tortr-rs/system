@@ -1,22 +1,22 @@
 #!/bin/sh
 # mkapk: packs DIR into a package mag installs, signed with KEY, and leaves its index entry in OUT/.idx for mkrepo.
-#   mkapk -k KEY -n NAME -v VERSION -a ARCH -d DESC [-D DEPS] [-s SCRIPTS] [-o OUT] DIR
+#   mkapk -k KEY -n NAME -v VERSION -a ARCH -d DESC [-D DEPS] [-s SCRIPTS] [-t TRIGGERS] [-o OUT] DIR
 # SCRIPTS is a directory with any of post-install, pre-upgrade and the rest
 set -e
 # GNU tar, for --record-size and --sort
 tar=$(command -v gtar || echo tar)
-deps= scripts= out=.
-while getopts k:n:v:a:d:D:s:o: o; do
+deps= scripts= triggers= out=.
+while getopts k:n:v:a:d:D:s:t:o: o; do
 	case $o in
 	k) key=$OPTARG;; n) name=$OPTARG;; v) ver=$OPTARG;; a) arch=$OPTARG;; d) desc=$OPTARG;;
-	D) deps=$OPTARG;; s) scripts=$OPTARG;; o) out=$OPTARG;;
+	D) deps=$OPTARG;; s) scripts=$OPTARG;; t) triggers=$OPTARG;; o) out=$OPTARG;;
 	*) exit 2;;
 	esac
 done
 shift $((OPTIND - 1))
 dir=$1
 if [ -z "$key" ] || [ -z "$name" ] || [ -z "$ver" ] || [ -z "$arch" ] || [ ! -d "$dir" ]; then
-	echo "usage: mkapk -k KEY -n NAME -v VERSION -a ARCH -d DESC [-D DEPS] [-s SCRIPTS] [-o OUT] DIR" >&2
+	echo "usage: mkapk -k KEY -n NAME -v VERSION -a ARCH -d DESC [-D DEPS] [-s SCRIPTS] [-t TRIGGERS] [-o OUT] DIR" >&2
 	exit 2
 fi
 mkdir -p "$out/.idx"
@@ -38,6 +38,7 @@ $tar --format=gnu --owner=0 --group=0 --numeric-owner --sort=name -C "$dir" -cf 
 	echo "arch = $arch"
 	echo "license = BSD-2-Clause"
 	for d in $deps; do echo "depend = $d"; done
+	[ -z "$triggers" ] || echo "triggers = $triggers"
 	echo "datahash = $(sha256sum "$tmp/data.tar.gz" | cut -d' ' -f1)"
 } > "$tmp/c/.PKGINFO"
 more=
