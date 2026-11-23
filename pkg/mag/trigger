@@ -4,5 +4,5 @@ f=/var/lib/mag/.install-if
 [ -e $f ] && exit 0
 touch $f
 unset MAG_ROOT
-mag upgrade
+MAG_YES=1 mag upgrade
 exit 0

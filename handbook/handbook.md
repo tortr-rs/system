@@ -446,7 +446,9 @@ nothing but the download command, and bash when it builds from a source tree (4.
     mag deps PKG               what it needs; rdeps PKG for what needs it
     mag fetch PKG...           only download them
 
-`-n` says what would happen and does nothing, `-f` goes on when files clash or something still needs a package.
+Before it installs or removes anything it lists the packages, where they come from and their sizes, and asks.
+`-n` says what would happen and does nothing, `-f` goes on when files clash or something still needs a package. `-y`
+or `MAG_YES=1` answers yes, for scripts.
 `MAG_ROOT=/mnt mag ...` works on another root, which is what chamesle-bootstrap does.
 
 ### 4.2 Installing and removing
@@ -1073,6 +1075,6 @@ X writes `~/.local/share/xorg/Xorg.0.log`; `grep EE` in it shows the errors.
     arch-chroot DIR [COMMAND...]
     chamesle-disk DISK
     chamesle-boot [DIR]
-    mag [-nf] update|install|build|remove|upgrade|autoremove|list|info|search|files|owns|deps|rdeps|fetch
+    mag [-nfy] update|install|build|remove|upgrade|autoremove|list|info|search|files|owns|deps|rdeps|fetch
     rifle --install DIR | --list
     limine bios-install DEVICE

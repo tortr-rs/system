@@ -40,10 +40,11 @@ esac
 
 mkdir -p "$target/etc/mag" "$target/dev" "$target/proc" "$target/sys" "$target/run" "$target/tmp" "$target/boot"
 chmod 1777 "$target/tmp"
-cp $conf/repos "$target/etc/mag/repos"
+# the base never comes from the AUR: its index (15 MB) waits for the first mag update on the system
+grep -v '^aur ' $conf/repos > "$target/etc/mag/repos"
 cp -R $conf/keys "$target/etc/mag/"
 [ -n "$arch" ] && echo "$arch" > "$target/etc/mag/arch"
-export MAG_ROOT=$target
+export MAG_ROOT=$target MAG_YES=1
 mag update
 if [ $libc = glibc ]; then
 	# pacman's hooks (the initramfs, the users, tmpfiles) want /proc, /sys and /dev in there, as pacstrap gives them
@@ -51,6 +52,7 @@ if [ $libc = glibc ]; then
 	trap 'for m in run dev sys proc; do umount -R "$target/$m" 2>/dev/null; done' EXIT
 	mag install chamesle-base ${kernel:-linux} $firmware "$@"
 	rm -f "$target"/etc/mag/keys/*.gpg
+	cp $conf/repos "$target/etc/mag/repos"
 	# Artix's localmount would mount a second /sys over the cgroups: proc and sys are its services' to mount
 	[ -f "$target/etc/fstab" ] && sed -i '/^proc[[:space:]]/d; /^sysfs[[:space:]]/d' "$target/etc/fstab"
 else

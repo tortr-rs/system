@@ -7,6 +7,7 @@
 die() { echo "chamesle-boot: $*" >&2; exit 1; }
 usage() { echo "usage: chamesle-boot [-b limine|grub] [DIR]" >&2; exit 2; }
 loader=limine
+export MAG_YES=1
 while getopts b: o; do
 	case $o in
 	b) loader=$OPTARG;;
