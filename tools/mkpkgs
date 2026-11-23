@@ -45,7 +45,8 @@ if [ "$LIBC" = glibc ]; then
 	b=$tmp/base
 	common "$b"
 	cp "$here/pkg/chamesle-base-glibc/repos" "$b/etc/mag/repos"
-	cp "$here/files/etc/xdg/fastfetch/config.jsonc" "$b/usr/share/chamesle/" 2>/dev/null || :
+	mkdir -p "$b/etc/xdg/fastfetch"
+	cp "$here/files/etc/xdg/fastfetch/config.jsonc" "$b/etc/xdg/fastfetch/"
 	mkdir -p "$b/etc/sysctl.d" "$b/var/lib/pacman/local"
 	cp "$here/files/etc/sysctl.d/10-chamesle.conf" "$b/etc/sysctl.d/"
 	echo 9 > "$b/var/lib/pacman/local/ALPM_DB_VERSION"
