@@ -1,0 +1,21 @@
+#!/bin/sh
+# takes Artix's name out of what shows: os-release, the release files, GRUB and the line OpenRC boots with.
+# runs after install and from the hook whenever filesystem, openrc, lsb-release or grub come again
+cp /usr/share/chamesle/os-release /usr/lib/os-release
+[ -e /etc/os-release ] || ln -s ../usr/lib/os-release /etc/os-release
+[ -e /etc/artix-release ] && echo Chamesle > /etc/artix-release
+[ -e /etc/lsb-release ] && sed -i 's/^DISTRIB_ID=.*/DISTRIB_ID=Chamesle/; s/^DISTRIB_DESCRIPTION=.*/DISTRIB_DESCRIPTION="Chamesle"/' /etc/lsb-release
+[ -e /etc/default/grub ] && sed -i 's/^GRUB_DISTRIBUTOR=.*/GRUB_DISTRIBUTOR="Chamesle"/' /etc/default/grub
+[ -e /boot/grub/grub.cfg ] && sed -i 's/Artix Linux/Chamesle/g' /boot/grub/grub.cfg
+sed -i 's/:Artix Linux Package Management:/:Package Management:/' /etc/passwd
+# OpenRC has "Artix Linux" compiled in: the same bytes, Chamesle and zeros, on a copy that is then moved over
+for f in /usr/bin/openrc /usr/bin/openrc-run /usr/bin/openrc-shutdown /usr/bin/openrc-init /usr/bin/rc-service \
+	/usr/bin/rc-update /usr/bin/rc-status /usr/bin/supervise-daemon /usr/bin/start-stop-daemon /usr/lib/librc.so.* /usr/lib/libeinfo.so.*; do
+	[ -f "$f" ] && [ ! -L "$f" ] || continue
+	at=$(/usr/bin/grep -obaF 'Artix Linux' "$f" | cut -d: -f1)
+	[ -n "$at" ] || continue
+	cp -p "$f" "$f.brand"
+	for o in $at; do printf 'Chamesle\0\0\0' | /usr/bin/dd of="$f.brand" bs=1 seek="$o" conv=notrunc status=none; done
+	mv "$f.brand" "$f"
+done
+exit 0

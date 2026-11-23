@@ -409,10 +409,10 @@ the root is btrfs or ext4.
     chamesle-disk -t btrfs -y /dev/sda
     chamesle-bootstrap -l glibc -n box -f "linux-firmware-intel linux-firmware-realtek" /mnt networkmanager networkmanager-openrc
 
-The repos and keyrings come from `/usr/share/chamesle/glibc` on the live system. `-k` is the kernel (`linux`, or
-`linux-lts`, `linux-zen`); `-f` the firmware, split by vendor as in Arch (`linux-firmware-amdgpu`, `-nvidia`,
-`-atheros`, `-broadcom`, `-mediatek`, or `linux-firmware` for all of it). For an NVIDIA card, add `nvidia-open
-nvidia-utils`. Users are made with `useradd`, services have their names from Artix (`NetworkManager`, `iwd`):
+The repos and keyrings come from `/usr/share/chamesle/glibc` on the live system. `-k` is the kernel (`linux-lts`, or
+`linux`, `linux-zen`); `-f` the firmware, split by vendor as in Arch (`linux-firmware-amdgpu`, `-nvidia`,
+`-atheros`, `-broadcom`, `-mediatek`, or `linux-firmware` for all of it). For an NVIDIA card, add `nvidia-open-lts
+nvidia-utils` (`nvidia-open` with `linux`). Users are made with `useradd`, services have their names from Artix (`NetworkManager`, `iwd`):
 
     echo root:PASSWORD | arch-chroot /mnt chpasswd
     arch-chroot /mnt useradd -m -G wheel,video,input,audio alice
@@ -421,7 +421,9 @@ nvidia-utils`. Users are made with `useradd`, services have their names from Art
     arch-chroot /mnt rc-update add NetworkManager default
     chamesle-boot /mnt
 
-chamesle-boot sees the glibc system and writes the entries for mkinitcpio's `initramfs-linux.img`.
+chamesle-boot sees the glibc system and writes the entries for mkinitcpio's `initramfs-linux-lts.img`.
+The base keeps the name Chamesle where Artix's packages would put theirs: os-release, the release files, GRUB's
+menu and the line OpenRC boots with (`/usr/lib/chamesle/brand`, run again by a hook when those packages come).
 
 
 ## 4. mag

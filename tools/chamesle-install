@@ -66,7 +66,7 @@ if [ $libc = glibc ]; then
 		linux-firmware-broadcom "Broadcom wifi" $(on 0x14e4 0x0280) \
 		linux-firmware-nvidia "NVIDIA graphics" $(on 0x10de 0x03)) || die "left"
 	nvidia=
-	has 0x10de 0x03 && d --yesno "There is an NVIDIA card. Install NVIDIA's driver (nvidia-open), not nouveau?" 0 0 && nvidia="nvidia-open nvidia-utils"
+	has 0x10de 0x03 && d --yesno "There is an NVIDIA card. Install NVIDIA's driver (nvidia-open), not nouveau?" 0 0 && nvidia="nvidia-open-lts nvidia-utils"
 else
 fw=$(d --separate-output --checklist "Firmware for the hardware (ticked: what this machine has)" 0 0 8 \
 	linux-firmware-intel "Intel wifi and bluetooth" $(on 0x8086 0x0280) \

@@ -11,7 +11,7 @@ usage() {
 	echo "  -l  musl (default) or glibc" >&2
 	echo "  -a  x86_64, x86 and so on (default: this machine's)" >&2
 	echo "  -n  host name of the new system (default chamesle)" >&2
-	echo "  -k  the kernel package (default linux-lts, linux on glibc), -f its firmware (default linux-firmware-none, none on glibc)" >&2
+	echo "  -k  the kernel package (default linux-lts), -f its firmware (default linux-firmware-none, none on glibc)" >&2
 	exit 2
 }
 arch= name=chamesle kernel= firmware= libc=musl
@@ -50,7 +50,7 @@ if [ $libc = glibc ]; then
 	# pacman's hooks (the initramfs, the users, tmpfiles) want /proc, /sys and /dev in there, as pacstrap gives them
 	for m in proc sys dev run; do mount --rbind /$m "$target/$m" && mount --make-rslave "$target/$m"; done
 	trap 'for m in run dev sys proc; do umount -R "$target/$m" 2>/dev/null; done' EXIT
-	mag install chamesle-base ${kernel:-linux} $firmware "$@"
+	mag install chamesle-base ${kernel:-linux-lts} $firmware "$@"
 	rm -f "$target"/etc/mag/keys/*.gpg
 	cp $conf/repos "$target/etc/mag/repos"
 	# Artix's localmount would mount a second /sys over the cgroups: proc and sys are its services' to mount

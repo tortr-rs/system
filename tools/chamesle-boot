@@ -20,11 +20,14 @@ case $loader in limine|grub) ;; *) die "-b is limine or grub";; esac
 [ "$(id -u)" = 0 ] || die "needs root"
 t=${1:-/mnt}
 t=${t%/}
+# / is the running system: mounts and paths go by "/"
+top=${t:-/}
 [ -x "$t/sbin/init" ] || die "$t has no system in it, run chamesle-bootstrap first"
 
+inroot() { if [ -z "$t" ]; then "$@"; else arch-chroot "$t" "$@"; fi; }
 mnt() { awk -v m="$1" '$2 == m { print $1, $3, $4 }' /proc/mounts | tail -1; }
-set -- $(mnt "$t")
-[ $# = 3 ] || die "nothing is mounted on $t"
+set -- $(mnt "$top")
+[ $# = 3 ] || die "nothing is mounted on $top"
 rootdev=$1 rootfs=$2 rootopts=$3
 set -- $(mnt "$t/boot")
 bootdev=$1 bootfs=$2
@@ -34,14 +37,14 @@ glibc=
 [ -e "$t/usr/lib/libc.so.6" ] && glibc=1
 kernels=
 for k in "$t"/boot/vmlinuz-*; do [ -e "$k" ] && kernels="$kernels ${k##*/vmlinuz-}"; done
-[ -n "$kernels" ] || die "no kernel in $t/boot, install a kernel first (linux-lts, or linux on glibc)"
+[ -n "$kernels" ] || die "no kernel in $t/boot, install a kernel first (linux-lts)"
 img() { [ -e "$t/boot/initramfs-$1.img" ] && echo "initramfs-$1.img" || echo "initramfs-$1"; }
 
 # feature NAME PACKAGE...: puts NAME in the initramfs, with the packages it needs
 feature() {
 	if [ -n "$glibc" ]; then
 		shift
-		arch-chroot "$t" mag install "$@" || die "mag install $* failed"
+		inroot mag install "$@" || die "mag install $* failed"
 		return
 	fi
 	conf=$t/etc/mkinitfs/mkinitfs.conf
@@ -49,9 +52,9 @@ feature() {
 	echo "adding $1 to the initramfs"
 	f=$1
 	shift
-	arch-chroot "$t" mag install "$@" || die "mag install $* failed"
+	inroot mag install "$@" || die "mag install $* failed"
 	sed -i "/^features=/s/\"\$/ $f\"/" "$conf"
-	for m in "$t"/lib/modules/*; do arch-chroot "$t" mkinitfs "${m##*/}" || die "mkinitfs failed"; done
+	for m in "$t"/lib/modules/*; do inroot mkinitfs "${m##*/}" || die "mkinitfs failed"; done
 }
 
 if [ "$rootfs" = zfs ] && [ -n "$glibc" ]; then
@@ -96,12 +99,12 @@ if [ "$(lsblk -dno PTTYPE "$disk")" = gpt ] && ! lsblk -no PARTTYPE "$disk" | gr
 
 if [ $loader = grub ]; then
 	case $(cat "$t/etc/mag/arch" 2>/dev/null) in x86) efi=i386-efi;; *) efi=x86_64-efi;; esac
-	if [ -n "$glibc" ]; then arch-chroot "$t" mag install grub >/dev/null || die "mag install grub failed"
-	else arch-chroot "$t" mag install grub grub-efi ${bios:+grub-bios} >/dev/null || die "mag install grub failed"; fi
-	arch-chroot "$t" grub-install --target=$efi --efi-directory=/boot --boot-directory=/boot --removable --no-nvram >/dev/null || die "grub-install for UEFI failed"
+	if [ -n "$glibc" ]; then inroot mag install grub >/dev/null || die "mag install grub failed"
+	else inroot mag install grub grub-efi ${bios:+grub-bios} >/dev/null || die "mag install grub failed"; fi
+	inroot grub-install --target=$efi --efi-directory=/boot --boot-directory=/boot --removable --no-nvram >/dev/null || die "grub-install for UEFI failed"
 	echo "UEFI: GRUB in EFI/BOOT on $bootdev"
 	if [ -n "$bios" ]; then
-		arch-chroot "$t" grub-install --target=i386-pc --boot-directory=/boot "$disk" >/dev/null || die "grub-install for BIOS failed"
+		inroot grub-install --target=i386-pc --boot-directory=/boot "$disk" >/dev/null || die "grub-install for BIOS failed"
 		echo "BIOS: GRUB is on $disk"
 	else
 		echo "BIOS: $disk is GPT with no BIOS boot partition, so it boots by UEFI only"
@@ -119,7 +122,7 @@ if [ $loader = grub ]; then
 	exit 0
 fi
 
-[ -e "$t/usr/share/limine/limine-bios.sys" ] || arch-chroot "$t" mag install limine || die "mag install limine failed"
+[ -e "$t/usr/share/limine/limine-bios.sys" ] || inroot mag install limine || die "mag install limine failed"
 
 c=$t/boot/limine.conf
 [ -e "$c" ] && mv "$c" "$c.old" && echo "the old limine.conf is limine.conf.old"
@@ -141,6 +144,6 @@ cp "$t/usr/share/limine/limine-bios.sys" "$t/boot/"
 if [ -z "$bios" ]; then
 	echo "BIOS: $disk is GPT with no BIOS boot partition, so it boots by UEFI only"
 else
-	arch-chroot "$t" limine bios-install "$disk" >/dev/null || die "limine bios-install $disk failed"
+	inroot limine bios-install "$disk" >/dev/null || die "limine bios-install $disk failed"
 	echo "BIOS: limine is on $disk"
 fi

@@ -5,4 +5,5 @@ Chamesle. The handbook is /usr/share/doc/chamesle/handbook.md, mag help says how
 M
 grep -q '^permit persist :wheel' /etc/doas.conf 2>/dev/null || echo 'permit persist :wheel' >> /etc/doas.conf
 chmod 600 /etc/doas.conf
+/usr/lib/chamesle/brand
 exit 0
