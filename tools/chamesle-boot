@@ -144,6 +144,8 @@ cp "$t/usr/share/limine/limine-bios.sys" "$t/boot/"
 if [ -z "$bios" ]; then
 	echo "BIOS: $disk is GPT with no BIOS boot partition, so it boots by UEFI only"
 else
-	inroot limine bios-install "$disk" >/dev/null || die "limine bios-install $disk failed"
+	# on GPT, stage 2 goes in the BIOS boot partition: limine wants its number
+	n=$(lsblk -lno NAME,PARTTYPE "$disk" | awk 'tolower($2) == "21686148-6449-6e6f-744e-656564454649" { print $1 }' | head -n 1 | sed 's/.*[^0-9]//')
+	inroot limine bios-install "$disk" $n || die "limine bios-install $disk $n failed"
 	echo "BIOS: limine is on $disk"
 fi
