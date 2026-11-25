@@ -2,6 +2,7 @@
 # mkpkgs ARCH OUT: Chamesle's own packages for one arch, signed with KEY, and the index of OUT.
 #   KEY=~/.chamesle-keys/chamesle-20261118.rsa MAG=~/src/mag/mag RIFLE=~/src/rifle/rifle mkpkgs x86_64 repo/x86_64
 # RIFLE is left out where rifle does not build (it is x86_64 only for now). REL is the -rN of the base's version.
+# REACH is reach built on c.h for ARCH (./build.sh, or ./build.sh 32 for x86); it is static, the same for musl and glibc
 # WMREL makes slate too, with that -rN; DOCKAPPS is what desktop/slate/dockapps built for this arch, for chamesle-dockapps.
 # LIBC=glibc makes the packages of the glibc Chamesle instead, for repo/glibc. KEYRINGS is a directory with artix.gpg and
 # archlinux.gpg (from a root where mag installed artix-keyring and archlinux-keyring): the base gets them so its
@@ -18,6 +19,13 @@ mkapk() { "$here/tools/mkapk" -k "$KEY" -a "$arch" -o "$out" "$@"; }
 mkdir -p "$tmp/mag/usr/bin"
 install -m755 "$MAG" "$tmp/mag/usr/bin/mag"
 mkapk -n mag -v "$("$MAG" --version | cut -d' ' -f2)" -d "the package manager" -s "$here/pkg/mag" -t /etc/init.d "$tmp/mag"
+
+if [ -n "$REACH" ]; then
+	mkdir -p "$tmp/reach/usr/bin"
+	install -m755 "$REACH" "$tmp/reach/usr/bin/reach"
+	[ "$LIBC" = glibc ] && ssh=openssh || ssh=openssh-client-default
+	mkapk -n reach -v 1 -d "ssh by name on the local network" -D "$ssh" "$tmp/reach"
+fi
 
 # the files every base has: the tools, the handbook, what makes a glibc system
 common() {
