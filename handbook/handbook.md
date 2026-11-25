@@ -133,7 +133,9 @@ It asks for the passphrase. dhcpcd gives the interface an address once it is con
 
 ## 3. Installing
 
-The live system has `chamesle-install`, which asks for the disk, the file system (ZFS, btrfs or ext4), the bootloader
+The live system has `chamesle-install`, which asks for the keyboard (loaded right away, and set for the console and X
+on the new system), the disk, on x86_64 musl or glibc (and on glibc the kernel: linux-lts, or linux for the newest
+hardware), the file system (ZFS, btrfs or ext4), the bootloader
 (limine or GRUB), the firmware (what the machine has is ticked), wifi, the host name, the root password and a user, and
 then does this chapter on the whole disk. The log is `/var/log/chamesle-install.log`, and a copy is kept on the new
 system. The rest of the chapter is the same install by hand, for another layout or to know what it did.
@@ -163,6 +165,9 @@ partitions. Three of them work for BIOS and UEFI both:
 | 1 | 1M | BIOS boot | limine's BIOS code, not used on UEFI |
 | 2 | 512M | EFI System | `/boot`, FAT32 |
 | 3 | the rest | Linux filesystem | `/`, ZFS |
+
+On a machine that boots by BIOS, a GPT disk needs the 1M BIOS boot partition; without it chamesle-disk and
+chamesle-boot stop and say so. A dos label works too.
 
 Write the table and quit cfdisk. chamesle-disk lists the partitions and asks which one is the boot partition and which is
 the root. Then it does, in this order:

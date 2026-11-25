@@ -9,6 +9,16 @@ d() { dialog --stdout --backtitle "$T installer" "$@"; }
 msg() { d --msgbox "$1" 0 0; }
 log=/var/log/chamesle-install.log
 
+# console keymap and X layout; the console one is loaded right away for the rest of the questions
+km=$(d --default-item us --menu "The keyboard" 0 0 8 \
+	us "US (QWERTY)" fr "French (AZERTY)" de "German (QWERTZ)" gb "British" es "Spanish" it "Italian" \
+	be "Belgian (AZERTY)" pt "Portuguese" ch-fr "Swiss French" us-dvorak "Dvorak" pl "Polish") || die "left"
+case $km in *-*) xkb="${km%%-*} ${km#*-}";; *) xkb=$km;; esac
+# the console's names for it; on musl the xkb keymaps do not load, the legacy ones do, by their path
+case $km in gb) km=uk;; be|pt) km=$km-latin1;; ch-fr) km=fr_CH;; us-dvorak) km=dvorak;; pl) km=pl2;; esac
+kmap() { find /usr/share/keymaps/legacy -name "$km.map.gz" | head -n 1; }
+loadkeys "$(kmap)" >/dev/null 2>&1
+
 # three tries: right after boot the first lookup can be slow
 online() { for i in 1 2 3; do curl -fsS -m 8 -o /dev/null https://chamesle.org/repo/x86_64/APKINDEX.tar.gz 2>/dev/null && return; sleep 2; done; return 1; }
 while ! online; do
@@ -54,7 +64,11 @@ loader=$(d --menu "The bootloader" 0 0 8 \
 # the firmware the hardware here wants, ticked already
 has() { for v in /sys/bus/pci/devices/*; do [ "$(cat $v/vendor)" = "$1" ] && case $(cat $v/class) in $2*) return 0;; esac; done; return 1; }
 on() { has "$@" && echo on || echo off; }
+kernel=
 if [ $libc = glibc ]; then
+	kernel=$(d --menu "The kernel" 0 0 8 \
+		linux-lts "the long term one (6.18)" \
+		linux "the newest (7.x): new hardware, sound on some laptops wants it") || die "left"
 	intel=off
 	{ has 0x8086 0x0280 || has 0x8086 0x03; } && intel=on
 	fw=$(d --separate-output --checklist "Firmware for the hardware (ticked: what this machine has)" 0 0 8 \
@@ -66,7 +80,7 @@ if [ $libc = glibc ]; then
 		linux-firmware-broadcom "Broadcom wifi" $(on 0x14e4 0x0280) \
 		linux-firmware-nvidia "NVIDIA graphics" $(on 0x10de 0x03)) || die "left"
 	nvidia=
-	has 0x10de 0x03 && d --yesno "There is an NVIDIA card. Install NVIDIA's driver (nvidia-open), not nouveau?" 0 0 && nvidia="nvidia-open-lts nvidia-utils"
+	has 0x10de 0x03 && d --yesno "There is an NVIDIA card. Install NVIDIA's driver (nvidia-open), not nouveau?" 0 0 && nvidia="nvidia-open$([ $kernel = linux-lts ] && echo -lts) nvidia-utils"
 else
 fw=$(d --separate-output --checklist "Firmware for the hardware (ticked: what this machine has)" 0 0 8 \
 	linux-firmware-intel "Intel wifi and bluetooth" $(on 0x8086 0x0280) \
@@ -101,7 +115,7 @@ user=$(d --inputbox "Your user name (empty for none)" 0 0) || die "left"
 user=$(echo "$user" | tr -cd 'a-z0-9_-')
 [ -n "$user" ] && userpw=$(pw "The password of $user")
 
-d --yesno "Install now?\n\n  disk        $disk (ERASED)\n  Chamesle    $libc\n  file system $fs\n  bootloader  $loader\n  firmware    $(echo $fw)\n  network     $wifi\n  host name   $host\n  user        ${user:-none}" 0 0 || die "nothing was changed"
+d --yesno "Install now?\n\n  disk        $disk (ERASED)\n  Chamesle    $libc${kernel:+, $kernel}\n  keyboard    $km\n  file system $fs\n  bootloader  $loader\n  firmware    $(echo $fw)\n  network     $wifi\n  host name   $host\n  user        ${user:-none}" 0 0 || die "nothing was changed"
 
 pkgs=
 case $libc/$wifi in
@@ -110,6 +124,8 @@ musl/networkmanager) pkgs="networkmanager networkmanager-wifi networkmanager-tui
 glibc/iwd) pkgs="iwd iwd-openrc";;
 glibc/networkmanager) pkgs="networkmanager networkmanager-openrc";;
 esac
+pkgs="$pkgs kbd"
+[ $libc = musl ] && pkgs="$pkgs kbd-legacy"
 if [ $libc = glibc ]; then
 	first= rest="$(echo $fw) $nvidia"
 else
@@ -124,7 +140,7 @@ step() { echo "==> $1" >> $log; d --infobox "$1" 3 60; }
 	chamesle-disk -t $fs -y "$disk" >> $log 2>&1 || exit 1
 	step "Installing the base (a few minutes)"
 	n=0
-	until chamesle-bootstrap -l $libc -n "$host" ${first:+-f $first} /mnt $rest $pkgs >> $log 2>&1; do
+	until chamesle-bootstrap -l $libc -n "$host" ${kernel:+-k $kernel} ${first:+-f $first} /mnt $rest $pkgs >> $log 2>&1; do
 		n=$((n + 1))
 		[ $n -lt 3 ] || exit 1
 		sleep 5
@@ -148,6 +164,14 @@ step() { echo "==> $1" >> $log; d --infobox "$1" 3 60; }
 		arch-chroot /mnt rc-update add $s default >> $log 2>&1;;
 	esac
 	[ $libc = glibc ] && [ $wifi != networkmanager ] && arch-chroot /mnt rc-update add dhcpcd default >> $log 2>&1
+	# the keymap service is keymaps on glibc, loadkeys on musl
+	if [ $libc = glibc ]; then ks=keymaps k=$km; else ks=loadkeys k=$(kmap); fi
+	sed -i "s|^keymap=.*|keymap=\"$k\"|" /mnt/etc/conf.d/$ks
+	arch-chroot /mnt rc-update add $ks boot >> $log 2>&1
+	mkdir -p /mnt/etc/X11/xorg.conf.d
+	set -- $xkb
+	printf 'Section "InputClass"\n\tIdentifier "keyboard"\n\tMatchIsKeyboard "on"\n\tOption "XkbLayout" "%s"\n%bEndSection\n' "$1" \
+		"${2:+\tOption \"XkbVariant\" \"$2\"\n}" > /mnt/etc/X11/xorg.conf.d/00-keyboard.conf
 	step "Installing the bootloader ($loader)"
 	chamesle-boot -b $loader /mnt >> $log 2>&1 || exit 1
 	cp $log /mnt/var/log/ 2>/dev/null

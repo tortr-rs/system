@@ -61,6 +61,8 @@ else
 	mag install chamesle-base $firmware ${kernel:-linux-lts} "$@"
 fi
 echo "$name" > "$target/etc/hostname"
+# startx's xauth wants the host name to resolve
+printf '127.0.0.1\tlocalhost %s\n::1\t\tlocalhost %s\n' "$name" "$name" > "$target/etc/hosts"
 [ -e "$target/etc/resolv.conf" ] || cp /etc/resolv.conf "$target/etc/" 2>/dev/null || :
 echo
 echo "the base is in $target. go on with the fstab, a password and the boot entry (handbook, 3.4)."

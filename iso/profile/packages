@@ -24,3 +24,5 @@ btrfs-progs
 iwd-openrc
 dbus-openrc
 wipefs
+kbd
+kbd-legacy
