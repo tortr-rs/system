@@ -1,0 +1,38 @@
+#!/bin/sh
+# mkopenrc OUT: OpenRC for i686 glibc, repackaged from Gentoo's x86 binary host into a Chamesle package in OUT, signed
+# with KEY. the 32-bit glibc edition takes its packages from Arch Linux 32 (systemd), which ships no OpenRC, so the
+# init comes from Gentoo, the one distro that still builds i686 glibc OpenRC. the per-daemon *-openrc scripts are noarch
+# and come from Artix as usual.
+#   KEY=~/.chamesle-keys/chamesle-20261118.rsa mkopenrc ~/chamesle/docs/repo/glibc/x86
+set -e
+here=$(cd "$(dirname "$0")/.." && pwd)
+bh=${BINHOST:-https://distfiles.gentoo.org/releases/x86/binpackages/23.0/i686}
+[ $# = 1 ] && [ -f "$KEY" ] || { echo "usage: KEY=... mkopenrc OUT" >&2; exit 2; }
+out=$1
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# the newest openrc in the host's index, and its version
+curl -fsSL "$bh/Packages" -o "$tmp/Packages"
+path=$(awk 'BEGIN{RS="";FS="\n"} /\nCPV: sys-apps\/openrc-[0-9]/{for(i=1;i<=NF;i++)if($i~/^PATH: /){sub(/^PATH: /,"",$i);print $i}}' "$tmp/Packages" | sort -V | tail -1)
+[ -n "$path" ] || { echo "mkopenrc: no openrc in $bh" >&2; exit 1; }
+ver=$(echo "$path" | sed -n 's#.*/openrc-\([0-9][^/]*\)-[0-9]*\.gpkg\.tar#\1#p')
+echo "==> openrc $ver from $bh"
+
+# a gpkg.tar holds image.tar.zst (the files); fold Gentoo's split bin/sbin into usr/bin, Arch32 is merged-usr
+curl -fsSL "$bh/$path" -o "$tmp/o.gpkg.tar"
+img=$(tar tf "$tmp/o.gpkg.tar" | grep '/image\.tar\.zst$')
+mkdir "$tmp/i"
+tar xf "$tmp/o.gpkg.tar" -O "$img" | zstd -dc | tar -C "$tmp/i" -xf -
+stage=$tmp/stage
+mkdir -p "$stage/usr/bin"
+cp -a "$tmp/i/image/usr" "$stage/" 2>/dev/null || true
+cp -a "$tmp/i/image/etc" "$stage/"
+for d in bin sbin usr/sbin; do [ -d "$tmp/i/image/$d" ] && cp -an "$tmp/i/image/$d/." "$stage/usr/bin/"; done
+rm -rf "$stage/usr/sbin"
+
+mkdir -p "$out"
+"$here/tools/mkapk" -k "$KEY" -a x86 -o "$out" -n openrc -v "$ver" \
+	-d "OpenRC init for i686 glibc (Gentoo x86 binpkg), so the Arch32 userland has services" \
+	-D "libcap pam glibc psmisc" "$stage"
+"$here/tools/mkrepo" "$out" "$KEY"
