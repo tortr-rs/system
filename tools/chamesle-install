@@ -156,6 +156,7 @@ step() { echo "==> $1" >> $log; d --infobox "$1" 3 60; }
 		for g in wheel video input audio netdev; do arch-chroot /mnt addgroup "$user" $g >> $log 2>&1; done
 	fi
 	step "Turning on the services"
+	arch-chroot /mnt rc-update add nftables boot >> $log 2>&1   # the firewall, before the network comes up
 	case $wifi in
 	iwd) arch-chroot /mnt rc-update add iwd default >> $log 2>&1;;
 	networkmanager)

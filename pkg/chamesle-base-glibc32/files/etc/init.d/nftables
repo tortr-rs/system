@@ -1,0 +1,17 @@
+#!/sbin/openrc-run
+# arch32's nftables ships only a systemd unit; this loads /etc/nftables.nft at boot
+description="the firewall"
+depend() {
+	before net
+	after sysctl
+}
+start() {
+	ebegin "Loading the firewall"
+	nft -f /etc/nftables.nft
+	eend $?
+}
+stop() {
+	ebegin "Flushing the firewall"
+	nft flush ruleset
+	eend $?
+}

@@ -64,7 +64,7 @@ if [ "$LIBC" = glibc ]; then
 		gconf=chamesle-base-glibc32
 		# no pacman: it hard-pulls systemd on arch32, and mag is the package manager and runs the alpm hooks itself.
 		# the keyring packages pull pacman too, so the base bakes the arch32 and arch keyrings in (below) instead.
-		gdeps="filesystem glibc bash coreutils util-linux shadow procps-ng iproute2 iputils findutils grep sed gawk tar gzip xz bzip2 file pciutils psmisc licenses dracut kmod opendoas dhcpcd e2fsprogs dosfstools curl mag rifle openrc"
+		gdeps="filesystem glibc bash coreutils util-linux shadow procps-ng iproute2 iputils findutils grep sed gawk tar gzip xz bzip2 file pciutils psmisc licenses dracut kmod opendoas dhcpcd nftables e2fsprogs dosfstools curl mag rifle openrc"
 	else
 		gconf=chamesle-base-glibc
 		gdeps="base openrc elogind-openrc mkinitcpio dhcpcd dhcpcd-openrc opendoas arch-install-scripts artix-keyring archlinux-keyring e2fsprogs dosfstools curl mag rifle"
@@ -72,6 +72,10 @@ if [ "$LIBC" = glibc ]; then
 	b=$tmp/base
 	common "$b"
 	[ -d "$here/pkg/$gconf/files" ] && cp -R "$here/pkg/$gconf/files/." "$b/"
+	# the secure defaults the musl base gets from its files overlay: the firewall and the umask (sysctl is below)
+	mkdir -p "$b/etc/profile.d"
+	cp "$here/files/etc/nftables.nft" "$b/etc/"
+	cp "$here/files/etc/profile.d/00-umask.sh" "$b/etc/profile.d/"
 	if [ "$arch" = x86 ]; then
 		# the running system verifies arch32 packages with these, baked in since the keyring packages pull pacman
 		mkdir -p "$b/usr/share/pacman/keyrings"
@@ -96,7 +100,7 @@ fi
 mkdir -p "$tmp/init"
 mkapk -n chamesle-init -v 1 -d "moves a base from before r20 over to OpenRC" -s "$here/pkg/chamesle-init" "$tmp/init"
 
-deps="alpine-baselayout busybox busybox-binsh busybox-suid doas mksh agetty bash mount umount findmnt util-linux-misc chamesle-init openrc busybox-openrc eudev eudev-openrc udev-init-scripts udev-init-scripts-openrc dhcpcd-openrc kmod dhcpcd e2fsprogs dosfstools curl mag"
+deps="alpine-baselayout busybox busybox-binsh busybox-suid doas mksh agetty bash mount umount findmnt util-linux-misc chamesle-init openrc busybox-openrc eudev eudev-openrc udev-init-scripts udev-init-scripts-openrc dhcpcd-openrc kmod dhcpcd nftables nftables-openrc e2fsprogs dosfstools curl mag"
 if [ -n "$RIFLE" ]; then
 	mkdir -p "$tmp/rifle/usr/bin"
 	install -m755 "$RIFLE" "$tmp/rifle/usr/bin/rifle"

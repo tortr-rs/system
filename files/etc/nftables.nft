@@ -1,0 +1,22 @@
+#!/usr/sbin/nft -f
+# the firewall. nothing comes in that you did not ask for; everything goes out. drop it to open a box up,
+# or add your own "tcp dport 22 accept" lines to the input chain to let something in.
+flush ruleset
+
+table inet filter {
+	chain input {
+		type filter hook input priority 0; policy drop;
+		ct state established,related accept
+		ct state invalid drop
+		iif lo accept
+		ip protocol icmp accept
+		ip6 nexthdr icmpv6 accept
+		udp sport 67 udp dport 68 accept   # a dhcp client's answers
+	}
+	chain forward {
+		type filter hook forward priority 0; policy drop;
+	}
+	chain output {
+		type filter hook output priority 0; policy accept;
+	}
+}
