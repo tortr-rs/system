@@ -37,8 +37,14 @@ common() {
 	cp "$here/files/usr/share/chamesle/logo.txt" "$1/usr/share/chamesle/"
 	if [ -n "$KEYRINGS" ]; then
 		mkdir -p "$1/usr/share/chamesle/glibc/keys"
-		cp "$here/pkg/chamesle-base-glibc/repos" "$1/usr/share/chamesle/glibc/"
-		cp "$here/keys/"*.pub "$KEYRINGS/artix.gpg" "$KEYRINGS/archlinux.gpg" "$1/usr/share/chamesle/glibc/keys/"
+		if [ "$arch" = x86 ]; then
+			# 32-bit glibc: Arch Linux 32, signed by the arch32 and the mainline arch keys
+			cp "$here/pkg/chamesle-base-glibc32/repos" "$1/usr/share/chamesle/glibc/repos"
+			cp "$here/keys/"*.pub "$KEYRINGS/archlinux32.gpg" "$KEYRINGS/archlinux.gpg" "$1/usr/share/chamesle/glibc/keys/"
+		else
+			cp "$here/pkg/chamesle-base-glibc/repos" "$1/usr/share/chamesle/glibc/repos"
+			cp "$here/keys/"*.pub "$KEYRINGS/artix.gpg" "$KEYRINGS/archlinux.gpg" "$1/usr/share/chamesle/glibc/keys/"
+		fi
 	fi
 }
 
@@ -50,9 +56,28 @@ if [ "$LIBC" = glibc ]; then
 	for t in $("$RIFLE" --list); do ln -s ../../../bin/rifle "$r/usr/lib/rifle/bin/$t"; done
 	cp "$here/pkg/chamesle-base-glibc/rifle.sh" "$r/etc/profile.d/"
 	mkapk -n rifle -v "$("$RIFLE" --version | head -n 1 | cut -d' ' -f2)" -d "the coreutils, in one program" "$r"
+	# the 64-bit base rides on Artix (openrc, elogind, the service scripts); there is no Artix for i686, so the
+	# 32-bit base takes its packages from Arch Linux 32 (systemd) and gets openrc from Chamesle's own repo (Gentoo
+	# binpkg, see mkopenrc). base and mkinitcpio pull systemd on arch32, so the essentials are named by hand and
+	# dracut makes the initramfs. the per-daemon openrc scripts arch32 lacks (dhcpcd) are baked into the base.
+	if [ "$arch" = x86 ]; then
+		gconf=chamesle-base-glibc32
+		# no pacman: it hard-pulls systemd on arch32, and mag is the package manager and runs the alpm hooks itself.
+		# the keyring packages pull pacman too, so the base bakes the arch32 and arch keyrings in (below) instead.
+		gdeps="filesystem glibc bash coreutils util-linux shadow procps-ng iproute2 iputils findutils grep sed gawk tar gzip xz bzip2 file pciutils psmisc licenses dracut kmod opendoas dhcpcd e2fsprogs dosfstools curl mag rifle openrc"
+	else
+		gconf=chamesle-base-glibc
+		gdeps="base openrc elogind-openrc mkinitcpio dhcpcd dhcpcd-openrc opendoas arch-install-scripts artix-keyring archlinux-keyring e2fsprogs dosfstools curl mag rifle"
+	fi
 	b=$tmp/base
 	common "$b"
-	cp "$here/pkg/chamesle-base-glibc/repos" "$b/etc/mag/repos"
+	[ -d "$here/pkg/$gconf/files" ] && cp -R "$here/pkg/$gconf/files/." "$b/"
+	if [ "$arch" = x86 ]; then
+		# the running system verifies arch32 packages with these, baked in since the keyring packages pull pacman
+		mkdir -p "$b/usr/share/pacman/keyrings"
+		cp "$KEYRINGS/archlinux32.gpg" "$KEYRINGS/archlinux.gpg" "$b/usr/share/pacman/keyrings/"
+	fi
+	cp "$here/pkg/$gconf/repos" "$b/etc/mag/repos"
 	mkdir -p "$b/usr/lib/chamesle" "$b/usr/share/libalpm/hooks"
 	install -m755 "$here/pkg/chamesle-base-glibc/brand" "$b/usr/lib/chamesle/brand"
 	cp "$here/pkg/chamesle-base-glibc/brand.hook" "$b/usr/share/libalpm/hooks/zz-chamesle-brand.hook"
@@ -63,8 +88,7 @@ if [ "$LIBC" = glibc ]; then
 	cp "$here/files/etc/sysctl.d/10-chamesle.conf" "$b/etc/sysctl.d/"
 	echo 9 > "$b/var/lib/pacman/local/ALPM_DB_VERSION"
 	mkapk -n chamesle-base -v "$(date +%Y%m%d)-r${REL:-0}" -d "the files in /etc and the tools of Chamesle, on glibc" \
-		-D "base openrc elogind-openrc mkinitcpio dhcpcd dhcpcd-openrc opendoas arch-install-scripts artix-keyring archlinux-keyring e2fsprogs dosfstools curl mag rifle" \
-		-s "$here/pkg/chamesle-base-glibc" "$b"
+		-D "$gdeps" -s "$here/pkg/chamesle-base-glibc" "$b"
 	"$here/tools/mkrepo" "$out" "$KEY"
 	exit 0
 fi

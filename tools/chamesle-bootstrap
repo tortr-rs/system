@@ -33,7 +33,7 @@ shift
 command -v mag >/dev/null || { echo "chamesle-bootstrap: mag is not in PATH" >&2; exit 1; }
 case $libc in
 musl) conf=/etc/mag;;
-glibc) conf=/usr/share/chamesle/glibc; arch=x86_64;;
+glibc) conf=/usr/share/chamesle/glibc; [ -n "$arch" ] || arch=x86_64;;
 *) usage;;
 esac
 [ -f $conf/repos ] && [ -d $conf/keys ] || { echo "chamesle-bootstrap: $conf/repos and $conf/keys are needed" >&2; exit 1; }

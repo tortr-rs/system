@@ -1,0 +1,11 @@
+#!/sbin/openrc-run
+# Arch32's dhcpcd ships only a systemd unit; this is its OpenRC service
+description="a DHCP client"
+command=/usr/bin/dhcpcd
+command_args="${dhcpcd_args:--q -b}"
+pidfile=/run/dhcpcd.pid
+depend() {
+	need localmount
+	use logger
+	provide net
+}

@@ -1,0 +1,2 @@
+# options for dhcpcd
+dhcpcd_args="-q -b"
